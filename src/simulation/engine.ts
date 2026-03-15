@@ -870,10 +870,14 @@ export class SimulationEngine {
           const organizationBonus = ({
             'nomadic': 0.1, 'tribal': 0.2, 'feudal': 0.4, 'kingdom': 0.6, 'empire': 0.8
           }[target.organization] || 0);
-          const totalDefense = defenseBonus + organizationBonus;
+          const totalDefense = Math.min(0.9, defenseBonus + organizationBonus);
           
-          // Raid damage reduced by defense
-          const baseDamage = Math.floor(monster.size * (monster.dangerLevel / 10) * 0.5);
+          // Raid damage based on danger level - monsters with higher danger are exponentially more deadly
+          // Base damage scales with danger level (not just monster.size)
+          const baseDamageByDanger = Math.pow(monster.dangerLevel, 2) * 2; // danger 9 = 162 base damage
+          const sizeMultiplier = 0.3 + (monster.size / 100); // Small bonus for larger monster populations
+          const typeMultiplier = this.getMonsterRaidMultiplier(monster.monsterType);
+          const baseDamage = Math.floor(baseDamageByDanger * sizeMultiplier * typeMultiplier);
           const raidDamage = Math.max(1, Math.floor(baseDamage * (1 - totalDefense)));
           target.size = Math.max(0, target.size - raidDamage);
 
@@ -956,6 +960,25 @@ export class SimulationEngine {
     };
     
     return growthRates[monsterType] || 0.025;
+  }
+
+  private getMonsterRaidMultiplier(monsterType: MonsterType): number {
+    // Different monster types have different raid devastation levels
+    // Dragons and giants cause massive destruction even in small numbers
+    const multipliers: Record<MonsterType, number> = {
+      [MonsterType.DRAGON]: 5.0,        // Single dragon can destroy a village
+      [MonsterType.GIANT]: 3.0,         // Giants crush buildings and armies
+      [MonsterType.ORC]: 1.2,           // Organized warbands, moderate damage
+      [MonsterType.GOBLIN]: 0.8,        // Hit-and-run, low individual damage
+      [MonsterType.UNDEAD]: 2.0,        // Fear and supernatural terror
+      [MonsterType.BEAST]: 1.0,         // Natural predators
+      [MonsterType.DEMON]: 2.5,         // Chaotic destruction
+      [MonsterType.ABERRATION]: 1.8,    // Unpredictable and terrifying
+      [MonsterType.FAE]: 1.0,           // Varies - can be mischievous or deadly
+      [MonsterType.CUSTOM]: 1.0,        // Default
+    };
+    
+    return multipliers[monsterType] || 1.0;
   }
 
   private checkQuestGeneration(world: WorldState, currentYear: number, nextYear: number): Event[] {
