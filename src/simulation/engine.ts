@@ -1037,6 +1037,52 @@ export class SimulationEngine {
           },
         });
       }
+
+      // Check for CRITICAL food shortage (famine) - highest priority
+      const foodAvailability = world.geography.resources[Resource.FOOD];
+      if (foodAvailability <= 0 && this.rng.boolean(0.25)) {
+        const quest: Quest = this.createFamineQuest(world, population, nextYear);
+        world.quests.push(quest);
+        world.society.quests.push(quest.id);
+        
+        events.push({
+          id: uuidv4(),
+          year: nextYear,
+          type: EventType.QUEST_GENERATED,
+          title: quest.title,
+          description: quest.description,
+          causes: [],
+          effects: [],
+          impact: {
+            resources: [{
+              type: 'decrease',
+              target: 'food',
+              description: 'Famine threatens extinction',
+            }],
+          },
+        });
+      } else if (foodAvailability < 10 && this.rng.boolean(0.15)) {
+        const quest: Quest = this.createFamineQuest(world, population, nextYear);
+        world.quests.push(quest);
+        world.society.quests.push(quest.id);
+        
+        events.push({
+          id: uuidv4(),
+          year: nextYear,
+          type: EventType.QUEST_GENERATED,
+          title: quest.title,
+          description: quest.description,
+          causes: [],
+          effects: [],
+          impact: {
+            resources: [{
+              type: 'decrease',
+              target: 'food',
+              description: 'Severe food shortage',
+            }],
+          },
+        });
+      }
     }
 
     return events;
@@ -1103,6 +1149,51 @@ export class SimulationEngine {
       deadline: year + 20,
       failureConsequences: `${population.name} is decimated, cities become ghost towns`,
       successConsequences: `${population.name} survives and honors heroes for generations`,
+      createdAt: year,
+    };
+  }
+
+  private createFamineQuest(world: WorldState, population: Population, year: number): Quest {
+    const foodAvailability = world.geography.resources[Resource.FOOD];
+    const urgency = foodAvailability <= 0 ? 'critical' : 'high';
+    
+    const famineScenarios = [
+      {
+        title: 'Find Food Sources',
+        description: `The granaries of ${population.name} are empty. ${foodAvailability <= 0 ? 'Starvation has begun' : 'Food is critically low'}. Heroes must venture into the wilderness to find edible plants, hunt game, or locate abandoned caches before the entire population perishes.`,
+        failure: `${population.name} faces extinction. Children starve, adults eat leather and bark, and the village becomes a graveyard.`,
+        success: `${population.name} survives the famine. The heroes are remembered as saviors, and new food storage practices are established.`,
+      },
+      {
+        title: 'Establish Irrigation Systems',
+        description: `The crops have failed and ${population.name} faces ${foodAvailability <= 0 ? 'total starvation' : 'severe hunger'}. Heroes must find master engineers or ancient texts to build irrigation systems that will ensure future harvests.`,
+        failure: 'Without water for the fields, the famine continues. The population disperses or dies, and the land becomes barren.',
+        success: 'Irrigation channels bring life to the fields. ${population.name} not only survives but thrives, with abundant harvests for generations.',
+      },
+      {
+        title: 'Trade for Food',
+        description: `${population.name}'s stores are empty. Heroes must brave dangerous journeys to establish trade routes with distant settlements willing to exchange food for the village's resources (stone, wood, iron).`,
+        failure: 'No trade routes established in time. The village is abandoned as survivors scatter to find food elsewhere.',
+        success: 'Trade caravans arrive with grain and provisions. ${population.name} establishes lasting trade partnerships and becomes a hub of commerce.',
+      },
+    ];
+    
+    const scenario = this.rng.pick(famineScenarios);
+    
+    return {
+      id: `quest_${uuidv4()}`,
+      title: scenario.title,
+      description: scenario.description,
+      type: QuestType.SURVIVAL,
+      status: QuestStatus.OPEN,
+      urgency,
+      originPopulationId: population.id,
+      reward: `${population.name} will share everything they have - gold, land, honors, and eternal gratitude`,
+      requiredHeroes: urgency === 'critical' ? 3 : 2,
+      assignedHeroes: [],
+      deadline: year + (urgency === 'critical' ? 5 : 15),
+      failureConsequences: scenario.failure,
+      successConsequences: scenario.success,
       createdAt: year,
     };
   }
