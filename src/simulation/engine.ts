@@ -148,12 +148,12 @@ export class SimulationEngine {
     const resourceEvents = this.checkResourceDynamics(world, currentYear, nextYear);
     events.push(...resourceEvents);
 
-    if (params.enableTechProgress && params.complexity !== 'simple') {
+    if (params.enableTechProgress) {
       const techEvents = this.checkTechnologicalProgress(world, currentYear, nextYear);
       events.push(...techEvents);
     }
 
-    if (params.enableConflict && params.complexity === 'complex') {
+    if (params.enableConflict && params.complexity !== 'simple') {
       const conflictEvents = this.checkConflictGeneration(world, currentYear, nextYear);
       events.push(...conflictEvents);
     }
@@ -181,7 +181,8 @@ export class SimulationEngine {
     events.push(...questEvents);
 
     // Craft/heritage generation (magical items, artifacts, legendary weapons)
-    if (params.complexity === 'complex') {
+    // Enabled by default (complex), disabled only in 'simple' mode
+    if (params.complexity !== 'simple') {
       const craftEvents = this.checkCraftGeneration(world, currentYear, nextYear);
       events.push(...craftEvents);
     }

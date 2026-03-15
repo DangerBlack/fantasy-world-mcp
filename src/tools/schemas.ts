@@ -31,7 +31,7 @@ export const SimulateSchema = z.object({
   timespan: z.number().int().positive().describe('Number of years to simulate'),
   stepSize: z.number().int().positive().optional().default(10)
     .describe('Years per simulation step'),
-  complexity: z.enum(['simple', 'moderate', 'complex']).optional().default('moderate')
+  complexity: z.enum(['simple', 'moderate', 'complex']).optional().default('complex')
     .describe('Simulation complexity level'),
   enableConflict: z.boolean().optional().default(true)
     .describe('Enable conflict events'),

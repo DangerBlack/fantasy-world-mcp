@@ -82,9 +82,9 @@ export class ToolHandler {
     enableTechProgress?: boolean;
   }): { world: any; events: any[]; eras: any[] } {
     const params: SimulationParams = {
-      timespan: args.timespan,
-      stepSize: args.stepSize ?? 10,
-      complexity: (args.complexity ?? 'moderate') as any,
+      timespan: args.timespan || 100,
+      stepSize: args.stepSize || 10,
+      complexity: (args.complexity ?? 'complex') as any,
       enableConflict: args.enableConflict ?? true,
       enableMigration: args.enableMigration ?? true,
       enableTechProgress: args.enableTechProgress ?? true,
