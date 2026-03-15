@@ -881,6 +881,76 @@ export class SimulationEngine {
           const raidDamage = Math.max(1, Math.floor(baseDamage * (1 - totalDefense)));
           target.size = Math.max(0, target.size - raidDamage);
 
+          // Check for extinction
+          if (target.size === 0) {
+            // Population extinct!
+            const extinctPopIndex = world.society.populations.findIndex(p => p.id === target.id);
+            if (extinctPopIndex > -1) {
+              world.society.populations.splice(extinctPopIndex, 1);
+              
+              // Convert location to ruins
+              const targetLocation = world.locations.find(l => l.inhabitants.includes(target.id));
+              if (targetLocation) {
+                targetLocation.type = LocationType.RUINS;
+                targetLocation.features = ['abandoned buildings', 'overgrown paths', 'remnants of daily life'];
+                targetLocation.description = `The ruins of ${targetLocation.name}, once home to ${target.name}`;
+                targetLocation.inhabitants = [];
+                targetLocation.dangerLevel = monster.dangerLevel;
+              }
+
+              events.push({
+                id: uuidv4(),
+                year: nextYear,
+                type: EventType.CONFLICT,
+                title: `${target.name} Extinct!`,
+                description: `${target.name} has been completely wiped out by ${monster.name}. Their settlement lies in ruins.`,
+                causes: [],
+                effects: [],
+                location: targetLocation?.id,
+                impact: {
+                  society: [
+                    {
+                      type: 'destroy',
+                      target: target.name,
+                      description: 'Population extinct, settlement abandoned',
+                    },
+                    {
+                      type: 'transform',
+                      target: targetLocation?.name || 'settlement',
+                      description: 'Settlement becomes ruins',
+                    },
+                  ],
+                },
+              });
+
+              // Generate quest for revenge/reconstruction
+              if (world.society.populations.some(p => p.race !== 'monster')) {
+                const quest: any = {
+                  id: `quest_${uuidv4()}`,
+                  title: `Avenge ${target.name}`,
+                  description: `${target.name} has been exterminated by ${monster.name}. Their ruins stand as a testament to the threat. Heroes must either slay the monster or rebuild what was lost.`,
+                  type: QuestType.MONSTER_HUNT,
+                  status: QuestStatus.OPEN,
+                  urgency: 'critical',
+                  relatedMonsterId: monster.id,
+                  relatedLocationId: targetLocation?.id,
+                  reward: 'The legacy of a fallen people, their treasures, and the chance to restore glory',
+                  requiredHeroes: 5,
+                  assignedHeroes: [],
+                  deadline: nextYear + 50,
+                  failureConsequences: `${monster.name} continues to terrorize the land unchecked`,
+                  successConsequences: 'Justice is served, or the land is reborn from ashes',
+                  createdAt: nextYear,
+                };
+                
+                if (!world.quests) world.quests = [];
+                if (!world.society.quests) world.society.quests = [];
+                world.quests.push(quest);
+                world.society.quests.push(quest.id);
+              }
+            }
+          }
+
           // Update relations
           target.relations[monster.id] = 'hostile';
           monster.relations[target.id] = 'hostile';
