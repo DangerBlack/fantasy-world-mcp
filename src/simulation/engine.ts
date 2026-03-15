@@ -298,41 +298,47 @@ export class SimulationEngine {
     const events: Event[] = [];
 
     for (const population of world.society.populations) {
-      const consumptionRate = population.size * 0.1;
+      // Consumption rate reduced significantly (was 0.1, now 0.01)
+      const consumptionRate = population.size * 0.01;
       
       const foodConsumed = Math.min(
         world.geography.resources[Resource.FOOD],
-        consumptionRate * 0.5
+        consumptionRate
       );
       world.geography.resources[Resource.FOOD] -= foodConsumed;
 
       if (population.organization !== 'nomadic') {
         const woodConsumed = Math.min(
           world.geography.resources[Resource.WOOD],
-          consumptionRate * 0.2
+          consumptionRate * 0.5
         );
         world.geography.resources[Resource.WOOD] -= woodConsumed;
       }
     }
 
     // Food and water regeneration based on technology and environment
-    // Agriculture technology enables food production
     const agricultureTech = world.society.technologies.includes('Agriculture');
     
     // Food regeneration: base + agriculture bonus + technology bonus
-    let foodRegen = 0.1; // Base natural regeneration
+    // Agriculture is MUCH more effective now
+    let foodRegen = 0.5; // Base natural regeneration (increased from 0.1)
     if (agricultureTech) {
-      foodRegen += 0.3; // Agriculture provides steady food production
+      foodRegen += 2.0; // Agriculture provides substantial food production (increased from 0.3)
     }
     
     // Check if any population has irrigation technology
     const hasIrrigation = world.society.populations.some(p => p.technologyLevel >= 6);
     if (hasIrrigation) {
-      foodRegen += 0.2; // Irrigation improves yields
+      foodRegen += 1.5; // Irrigation greatly improves yields (increased from 0.2)
     }
     
-    // Water availability affects food production
-    const waterFactor = world.geography.resources[Resource.WATER] / 100;
+    // Technology level bonus (better farming techniques)
+    const avgTechLevel = world.society.populations.reduce((sum, p) => sum + p.technologyLevel, 0) / 
+                         world.society.populations.length;
+    foodRegen += avgTechLevel * 0.3; // Each tech level adds 0.3 regen
+    
+    // Water availability affects food production (but not as severely)
+    const waterFactor = 0.5 + (world.geography.resources[Resource.WATER] / 200); // Min 0.5, max 1.0
     foodRegen *= waterFactor;
     
     world.geography.resources[Resource.FOOD] = Math.min(100, 
