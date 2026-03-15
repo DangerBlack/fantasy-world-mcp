@@ -907,12 +907,28 @@ export class SimulationEngine {
         if (civilizedPops.length > 0) {
           const target = this.rng.pick(civilizedPops);
           
-          // Defense calculation: larger/more organized populations defend better
+          // Defense calculation: location type + population size + organization
           const defenseBonus = Math.min(0.8, (target.size / 1000) * 0.2);
           const organizationBonus = ({
             'nomadic': 0.1, 'tribal': 0.2, 'feudal': 0.4, 'kingdom': 0.6, 'empire': 0.8
           }[target.organization] || 0);
-          const totalDefense = Math.min(0.9, defenseBonus + organizationBonus);
+          
+          // Location-based defense bonus
+          const targetLocation = world.locations.find(l => l.inhabitants.includes(target.id));
+          const locationBonus = ({
+            'cave': 0.3,           // Natural fortification, narrow entrances
+            'settlement': 0.1,      // Basic shelters, some organization
+            'village': 0.2,         // Central well, communal defense
+            'city': 0.5,            // Stone walls, organized guard
+            'fortress': 0.7,        // Built for defense, strategic position
+            'dungeon': 0.4,         // Underground, known passages
+            'temple': 0.2,          // Sacred protection, elevated position
+            'ruins': 0.0,           // No defense - crumbling structures
+            'landmark': 0.1,        // Natural features, minimal protection
+            'trade_post': 0.15,     // Some fortification, guards
+          }[targetLocation?.type || 'settlement'] || 0.1);
+          
+          const totalDefense = Math.min(0.95, defenseBonus + organizationBonus + locationBonus);
           
           // Raid damage based on danger level - monsters with higher danger are exponentially more deadly
           // Base damage scales with danger level (not just monster.size)
@@ -1105,7 +1121,6 @@ export class SimulationEngine {
           }
 
           // Chance to turn location into ruins
-          const targetLocation = world.locations.find(l => l.inhabitants.includes(target.id));
           if (targetLocation && targetLocation.type === 'city' && this.rng.boolean(0.1)) {
             targetLocation.type = LocationType.RUINS;
             targetLocation.features = ['crumbling walls', 'monster lair', 'scorch marks'];
