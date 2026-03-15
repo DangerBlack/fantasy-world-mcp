@@ -1047,7 +1047,7 @@ export class SimulationEngine {
       // Check for CRITICAL food shortage (famine) - highest priority
       const foodAvailability = world.geography.resources[Resource.FOOD];
       if (foodAvailability <= 0 && this.rng.boolean(0.25)) {
-        const quest: Quest = this.createFamineQuest(world, population, nextYear);
+        const quest: Quest = this.generateContextualQuest(world, population, 'famine', nextYear);
         world.quests.push(quest);
         world.society.quests.push(quest.id);
         
@@ -1068,7 +1068,7 @@ export class SimulationEngine {
           },
         });
       } else if (foodAvailability < 10 && this.rng.boolean(0.15)) {
-        const quest: Quest = this.createFamineQuest(world, population, nextYear);
+        const quest: Quest = this.generateContextualQuest(world, population, 'famine', nextYear);
         world.quests.push(quest);
         world.society.quests.push(quest.id);
         
@@ -1088,6 +1088,34 @@ export class SimulationEngine {
             }],
           },
         });
+      }
+
+      // AI-powered contextual quest generation for other problems
+      // Check for various world problems and generate creative quests
+      if (this.rng.boolean(0.08)) { // 8% chance per population per step
+        const quest = this.generateContextualQuest(world, population, 'adaptive', nextYear);
+        if (quest) {
+          world.quests.push(quest);
+          world.society.quests.push(quest.id);
+          
+          events.push({
+            id: uuidv4(),
+            year: nextYear,
+            type: EventType.QUEST_GENERATED,
+            title: quest.title,
+            description: quest.description,
+            causes: [],
+            effects: [],
+            location: world.locations.find(l => l.inhabitants.includes(population.id))?.id,
+            impact: {
+              society: [{
+                type: 'create',
+                target: quest.title,
+                description: `Contextual quest generated: ${quest.urgency} priority`,
+              }],
+            },
+          });
+        }
       }
     }
 
@@ -1202,6 +1230,231 @@ export class SimulationEngine {
       successConsequences: scenario.success,
       createdAt: year,
     };
+  }
+
+  private generateContextualQuest(
+    world: WorldState, 
+    population: Population, 
+    context: string,
+    year: number
+  ): Quest {
+    // Simulate AI-generated quest based on world context
+    // This creates unique quests by combining world state elements
+    
+    const terrain = world.geography.terrain;
+    const climate = world.geography.climate;
+    const resources = world.geography.resources;
+    const techLevel = population.technologyLevel;
+    const org = population.organization;
+    
+    // Build context summary for "AI" to work with
+    const contextData = {
+      population: population.name,
+      race: population.race,
+      size: population.size,
+      culture: population.culture,
+      organization: org,
+      technologyLevel: techLevel,
+      terrain,
+      climate,
+      resources: {
+        iron: resources[Resource.IRON] || 0,
+        gold: resources[Resource.GOLD] || 0,
+        wood: resources[Resource.WOOD] || 0,
+        stone: resources[Resource.STONE] || 0,
+        food: resources[Resource.FOOD] || 0,
+        water: resources[Resource.WATER] || 0,
+        magic: resources[Resource.MAGIC] || 0,
+        gems: resources[Resource.GEMS] || 0,
+      },
+      locations: world.locations.map(l => ({
+        name: l.name,
+        type: l.type,
+        dangerLevel: l.dangerLevel,
+      })),
+      monsters: world.society.populations
+        .filter(p => p.race === 'monster')
+        .map(m => {
+          const monster = m as MonsterPopulation;
+          return {
+            name: monster.monsterSubtype || monster.name,
+            dangerLevel: monster.dangerLevel || 5,
+            behavior: monster.behavior,
+          };
+        }),
+      technologies: world.society.technologies,
+      conflicts: world.society.conflicts,
+    };
+
+    // Quest templates based on context
+    const questTemplates: Record<string, (data: typeof contextData, year: number) => Quest> = {
+      'famine': (data, year) => this.createFamineQuestFromContext(data, year),
+      'adaptive': (data, year) => this.createAdaptiveQuest(data, year),
+      'monster': (data, year) => this.createMonsterQuestFromContext(data, year),
+      'resource': (data, year) => this.createResourceQuestFromContext(data, year),
+    };
+
+    const template = questTemplates[context];
+    if (!template) {
+      // Fallback to adaptive quest if context not found
+      return this.createAdaptiveQuest(contextData, year);
+    }
+
+    return template(contextData, year);
+  }
+
+  private createFamineQuestFromContext(data: any, year: number): Quest {
+    // Generate famine quest using actual world context
+    const terrainFeatures: Record<string, string> = {
+      mountains: 'mountain caves and high-altitude herbs',
+      forest: 'ancient forest groves and wild game',
+      plains: 'migratory herds and hidden valleys',
+      desert: 'oasis networks and underground water',
+      swamp: 'reeds, fish, and medicinal bog plants',
+      hills: 'terraced farming potential and caves',
+      coastal: 'fishing grounds and sea caves',
+      tundra: 'ice caves and hardy game',
+      jungle: 'exotic fruits and dangerous wildlife',
+    };
+
+    const terrainFeature = terrainFeatures[data.terrain as keyof typeof terrainFeatures] || 'wilderness';
+    const urgency = data.resources.food <= 0 ? 'critical' : 'high';
+    
+    return {
+      id: `quest_${uuidv4()}`,
+      title: `Secure Food from ${terrainFeature.charAt(0).toUpperCase() + terrainFeature.slice(1)}`,
+      description: `${data.population} faces ${data.resources.food <= 0 ? 'starvation' : 'severe hunger'}. The ${data.culture} must send heroes to ${terrainFeature} to ${data.terrain === 'coastal' ? 'establish fishing grounds' : data.terrain === 'forest' ? 'hunt and forage' : 'find edible resources'}. Time is running out.`,
+      type: QuestType.SURVIVAL,
+      status: QuestStatus.OPEN,
+      urgency,
+      originPopulationId: data.population,
+      reward: `${data.population} promises ${data.resources.gold > 50 ? 'treasure' : 'land and honors'} to those who save them`,
+      requiredHeroes: urgency === 'critical' ? 3 : 2,
+      assignedHeroes: [],
+      deadline: year + (urgency === 'critical' ? 5 : 15),
+      failureConsequences: `${data.population} perishes or scatters. Their ${data.terrain} settlement becomes a ghost town.`,
+      successConsequences: `${data.population} survives and establishes sustainable food sources. The heroes become legends.`,
+      createdAt: year,
+    };
+  }
+
+  private createAdaptiveQuest(data: any, year: number): Quest {
+    // Generate quest based on multiple world factors - truly "AI-like"
+    
+    // Check for specific problems and generate appropriate quests
+    if (data.monsters && data.monsters.length > 0) {
+      const threat = data.monsters.find((m: any) => m.dangerLevel > 5);
+      if (threat) {
+        return {
+          id: `quest_${uuidv4()}`,
+          title: `Stop the ${threat.name}`,
+          description: `The ${threat.name} (Danger: ${threat.dangerLevel}/10) has been ${threat.behavior === 'aggressive' ? 'raiding' : 'terrorizing'} ${data.population}. Their ${data.terrain} lair must be destroyed before more lives are lost.`,
+          type: QuestType.MONSTER_HUNT,
+          status: QuestStatus.OPEN,
+          urgency: threat.dangerLevel >= 7 ? 'critical' : 'high',
+          originPopulationId: data.population,
+          reward: `${data.population} will reward heroes with ${data.resources.iron > 50 ? 'weapons and armor' : 'gold and land'}`,
+          requiredHeroes: threat.dangerLevel >= 7 ? 4 : 2,
+          assignedHeroes: [],
+          deadline: year + 20,
+          failureConsequences: `${threat.name} destroys ${data.population}'s settlements. The ${data.terrain} region becomes uninhabitable.`,
+          successConsequences: `${data.population} gains security. Trade routes become safe. Heroes are celebrated.`,
+          createdAt: year,
+        };
+      }
+    }
+
+    if (data.resources.iron < 20) {
+      return {
+        id: `quest_${uuidv4()}`,
+        title: 'Find New Iron Mines',
+        description: `${data.population}'s iron reserves are depleted. Without iron, their ${data.technologies.join(', ')} will fail. Heroes must explore the ${data.terrain} to find new deposits or ancient caches.`,
+        type: QuestType.RESOURCE_RECOVERY,
+        status: QuestStatus.OPEN,
+        urgency: 'high',
+        originPopulationId: data.population,
+        reward: `Generous payment in ${data.resources.gold > 30 ? 'gold' : 'land'} and permanent mining rights`,
+        requiredHeroes: 3,
+        assignedHeroes: [],
+        deadline: year + 40,
+        failureConsequences: `${data.population}'s technology regresses. They become vulnerable to attack.`,
+        successConsequences: `${data.population} thrives with renewed resources. New trade routes established.`,
+        createdAt: year,
+      };
+    }
+
+    if (data.conflicts && data.conflicts.length > 0) {
+      const conflict = data.conflicts[0];
+      return {
+        id: `quest_${uuidv4()}`,
+        title: 'End the Growing Conflict',
+        description: `${data.population} is at odds with another group over ${conflict.cause}. Heroes must negotiate peace or resolve the dispute before war erupts.`,
+        type: QuestType.RECONCILIATION,
+        status: QuestStatus.OPEN,
+        urgency: 'medium',
+        originPopulationId: data.population,
+        reward: 'Peace, stability, and gratitude from both sides',
+        requiredHeroes: 2,
+        assignedHeroes: [],
+        deadline: year + 50,
+        failureConsequences: 'War breaks out. Both populations suffer devastating losses.',
+        successConsequences: 'Peaceful coexistence. Trade and cultural exchange flourish.',
+        createdAt: year,
+      };
+    }
+
+    // Default: mysterious quest based on terrain/climate
+    const mysteryTypes = [
+      {
+        title: 'Investigate Strange Phenomena',
+        desc: `Unusual ${data.climate} phenomena are appearing in the ${data.terrain}. ${data.population} fears it portends disaster. Heroes must investigate.`,
+        type: QuestType.MYSTERY,
+      },
+      {
+        title: 'Discover Ancient Secrets',
+        desc: `Ruins have been discovered in the ${data.terrain}. ${data.population} believes they contain knowledge that could save them. Heroes must explore.`,
+        type: QuestType.ARTIFACT_RETRIEVAL,
+      },
+      {
+        title: 'Protect the Settlement',
+        desc: `Strange signs suggest danger approaching ${data.population}'s ${data.terrain} home. Heroes must establish defenses and investigate.`,
+        type: QuestType.PROTECTION,
+      },
+    ];
+
+    const questType = this.rng.pick(mysteryTypes);
+    
+    return {
+      id: `quest_${uuidv4()}`,
+      title: questType.title,
+      description: questType.desc,
+      type: questType.type as QuestType,
+      status: QuestStatus.OPEN,
+      urgency: 'medium',
+      originPopulationId: data.population,
+      reward: `${data.population} will honor heroes as protectors and saviors`,
+      requiredHeroes: 2,
+      assignedHeroes: [],
+      deadline: year + 30,
+      failureConsequences: `Disaster strikes ${data.population}. Their ${data.terrain} settlement suffers greatly.`,
+      successConsequences: `${data.population} is saved. New knowledge or protection gained.`,
+      createdAt: year,
+    };
+  }
+
+  private createMonsterQuestFromContext(data: any, year: number): Quest {
+    // Fallback for monster quests
+    return this.createMonsterHuntQuest({ society: { populations: [{ id: data.population, ...data }] } as any, locations: [] } as any, 
+      { id: data.population, name: data.population, size: data.size, culture: data.culture, technologyLevel: data.technologyLevel, organization: data.organization, beliefs: [], relations: [], crafts: [] } as any,
+      { id: 'monster_1', name: data.monsters[0]?.name || 'Monster', size: 50, race: 'monster', culture: 'monster', technologyLevel: 0, organization: 'tribal', beliefs: [], relations: [], crafts: [], monsterType: 'orc', monsterSubtype: data.monsters[0]?.name, dangerLevel: data.monsters[0]?.dangerLevel || 5, behavior: 'aggressive', raidFrequency: 0.3, isDormant: false } as any,
+      year);
+  }
+
+  private createResourceQuestFromContext(data: any, year: number): Quest {
+    // Fallback for resource quests
+    return this.createResourceRecoveryQuest({ geography: { resources: { iron: data.resources.iron } } } as any,
+      { id: data.population, name: data.population, size: data.size, culture: data.culture, technologyLevel: data.technologyLevel, organization: data.organization, beliefs: [], relations: [], crafts: [] } as any,
+      Resource.IRON, year);
   }
 
   private createResourceRecoveryQuest(
