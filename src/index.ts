@@ -455,7 +455,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     switch (name) {
       case 'initializeWorld': {
-        const result = toolHandler.initializeWorld(args as any);
+        const result = await toolHandler.initializeWorld(args as any);
         console.error(`World created: ${result.worldId}`);
         return {
           content: [
@@ -544,7 +544,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'listWorlds': {
-        const result = toolHandler.listWorlds();
+        const result = await toolHandler.listWorlds();
         return {
           content: [
             {
@@ -560,7 +560,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'deleteWorld': {
-        const result = toolHandler.deleteWorld(args as any);
+        const result = await toolHandler.deleteWorld(args as any);
         return {
           content: [
             {
@@ -572,7 +572,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'loadWorld': {
-        const result = toolHandler.loadWorld(args as any);
+        const result = await toolHandler.loadWorld(args as any);
         console.error(`World loaded: ${result.worldId}`);
         return {
           content: [
@@ -590,7 +590,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'addPopulation': {
         const addArgs = args as any;
-        const result = toolHandler.addPopulation(addArgs);
+        const result = await toolHandler.addPopulation(addArgs);
         return {
           content: [
             {
@@ -607,7 +607,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'createCraft': {
         const craftArgs = args as any;
-        const result = toolHandler.createCraft(craftArgs);
+        const result = await toolHandler.createCraft(craftArgs);
         return {
           content: [
             {
@@ -625,7 +625,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'completeQuest': {
         const questArgs = args as any;
-        const result = toolHandler.completeQuest(questArgs);
+        const result = await toolHandler.completeQuest(questArgs);
         return {
           content: [
             {

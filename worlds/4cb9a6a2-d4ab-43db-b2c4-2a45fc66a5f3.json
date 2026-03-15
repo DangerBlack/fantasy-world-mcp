@@ -1,0 +1,137 @@
+{
+  "id": "4cb9a6a2-d4ab-43db-b2c4-2a45fc66a5f3",
+  "seed": "0.c4s84u07ul",
+  "timestamp": 0,
+  "geography": {
+    "terrain": "plains",
+    "climate": "temperate",
+    "resources": {
+      "iron": 70,
+      "gold": 25,
+      "silver": 10,
+      "copper": 30,
+      "wood": 50,
+      "stone": 100,
+      "food": 100,
+      "water": 70,
+      "magic": 10,
+      "gems": 30
+    },
+    "features": [
+      "thatched huts",
+      "central well",
+      "crop fields",
+      "open vistas",
+      "grasslands",
+      "migratory paths"
+    ],
+    "modifications": []
+  },
+  "society": {
+    "populations": [
+      {
+        "id": "16096b5c-e6be-4355-b42a-a9c8e7b39635",
+        "name": "Stardust",
+        "race": "human",
+        "size": 50,
+        "culture": "nomadic",
+        "technologyLevel": 1,
+        "organization": "tribal",
+        "beliefs": [],
+        "religiousTolerance": "tolerant",
+        "relations": {},
+        "crafts": []
+      }
+    ],
+    "cultures": [
+      "nomadic"
+    ],
+    "technologies": [],
+    "crafts": [],
+    "quests": [],
+    "conflicts": [],
+    "tradeRoutes": []
+  },
+  "locations": [
+    {
+      "id": "2eb30701-e35d-4998-8861-e23e0c8d6f3d",
+      "type": "village",
+      "name": "Iron Town",
+      "description": "Great Migration",
+      "geography": {},
+      "inhabitants": [
+        "16096b5c-e6be-4355-b42a-a9c8e7b39635"
+      ],
+      "history": [],
+      "features": [],
+      "connections": [],
+      "dangerLevel": 0,
+      "complexity": 1
+    }
+  ],
+  "events": [
+    {
+      "id": "6ffe0203-e2b8-431b-9d44-f595ed09e132",
+      "year": 0,
+      "type": "natural",
+      "title": "Beginning",
+      "description": "Great Migration",
+      "causes": [],
+      "effects": [
+        "2eb30701-e35d-4998-8861-e23e0c8d6f3d"
+      ],
+      "location": "2eb30701-e35d-4998-8861-e23e0c8d6f3d",
+      "impact": {
+        "society": [
+          {
+            "type": "create",
+            "target": "human Stardust",
+            "description": "50 human Stardust arrive"
+          }
+        ]
+      }
+    }
+  ],
+  "crafts": [],
+  "quests": [],
+  "beliefs": [],
+  "timeline": {
+    "events": [
+      {
+        "id": "6ffe0203-e2b8-431b-9d44-f595ed09e132",
+        "year": 0,
+        "type": "natural",
+        "title": "Beginning",
+        "description": "Great Migration",
+        "causes": [],
+        "effects": [
+          "2eb30701-e35d-4998-8861-e23e0c8d6f3d"
+        ],
+        "location": "2eb30701-e35d-4998-8861-e23e0c8d6f3d",
+        "impact": {
+          "society": [
+            {
+              "type": "create",
+              "target": "human Stardust",
+              "description": "50 human Stardust arrive"
+            }
+          ]
+        }
+      }
+    ],
+    "eras": [
+      {
+        "name": "Age of Beginning",
+        "startYear": 0,
+        "endYear": 0,
+        "summary": "The arrival of human"
+      }
+    ]
+  },
+  "metadata": {
+    "createdAt": "2026-03-15T22:52:30.514Z",
+    "simulationSteps": 0,
+    "lastUpdate": "2026-03-15T22:52:30.515Z",
+    "enableMonsters": true
+  }
+}

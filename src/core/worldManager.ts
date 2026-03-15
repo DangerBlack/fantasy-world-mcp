@@ -26,16 +26,38 @@ import {
   BeliefType,
   DeityDomain,
 } from '../types';
+import { WorldPersistence } from './worldPersistence';
 
 export class WorldManager {
   private worlds: Map<string, WorldState> = new Map();
   private rng: SeededRandom;
+  private persistence: WorldPersistence;
+  private autoSaveEnabled: boolean;
 
-  constructor(seed: string) {
+  constructor(seed: string, autoSave: boolean = true) {
     this.rng = new SeededRandom(seed);
+    this.persistence = new WorldPersistence();
+    this.autoSaveEnabled = autoSave;
+    this.initializePersistence();
   }
 
-  createWorld(conditions: InitialConditions): WorldState {
+  private async initializePersistence(): Promise<void> {
+    await this.persistence.initialize();
+    
+    // Load all saved worlds on startup
+    const savedWorlds = await this.persistence.loadAllWorlds();
+    for (const [worldId, world] of savedWorlds) {
+      this.worlds.set(worldId, world);
+    }
+  }
+
+  private async autoSave(world: WorldState): Promise<void> {
+    if (this.autoSaveEnabled) {
+      await this.persistence.saveWorld(world);
+    }
+  }
+
+  async createWorld(conditions: InitialConditions): Promise<WorldState> {
     const worldId = uuidv4();
     const seed = this.rng.next().toString(36);
 
@@ -248,6 +270,7 @@ export class WorldManager {
     }
 
     this.worlds.set(worldId, world);
+    await this.autoSave(world);
     return world;
   }
 
@@ -386,19 +409,32 @@ export class WorldManager {
     return this.worlds.get(worldId);
   }
 
-  updateWorld(worldId: string, world: WorldState): void {
+  async updateWorld(worldId: string, world: WorldState): Promise<void> {
     this.worlds.set(worldId, world);
+    await this.autoSave(world);
   }
 
-  deleteWorld(worldId: string): void {
+  async deleteWorld(worldId: string): Promise<boolean> {
     this.worlds.delete(worldId);
+    return await this.persistence.deleteWorld(worldId);
   }
 
-  listWorlds(): string[] {
-    return Array.from(this.worlds.keys());
+  async listWorlds(): Promise<string[]> {
+    const inMemory = Array.from(this.worlds.keys());
+    const onDisk = await this.persistence.listWorlds();
+    return [...new Set([...inMemory, ...onDisk])];
   }
 
-  addPopulation(worldId: string, population: Population): boolean {
+  async loadWorld(worldId: string): Promise<WorldState | null> {
+    // Check in-memory first
+    const inMemory = this.worlds.get(worldId);
+    if (inMemory) return inMemory;
+    
+    // Load from disk
+    return await this.persistence.loadWorld(worldId);
+  }
+
+  async addPopulation(worldId: string, population: Population): Promise<boolean> {
     const world = this.getWorld(worldId);
     if (!world) return false;
 
@@ -418,7 +454,7 @@ export class WorldManager {
       }
     }
     
-    this.updateWorld(worldId, world);
+    await this.autoSave(world);
     return true;
   }
 

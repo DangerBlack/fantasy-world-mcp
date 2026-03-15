@@ -19,7 +19,7 @@ export class ToolHandler {
     this.exportFormatter = new ExportFormatter();
   }
 
-  initializeWorld(args: {
+  async initializeWorld(args: {
     seed?: string;
     event: string;
     locationType: string;
@@ -27,7 +27,7 @@ export class ToolHandler {
     climate: string;
     resources?: Record<string, number>;
     population: any | any[];
-  }): { worldId: string; world: any } {
+  }): Promise<{ worldId: string; world: any }> {
     interface InputPopulation {
       name: string;
       size: number;
@@ -61,14 +61,14 @@ export class ToolHandler {
       population: populations.length === 1 ? populations[0] as any : populations as any,
     };
 
-    const world = this.worldManager.createWorld(conditions);
+    const world = await this.worldManager.createWorld(conditions);
     return { worldId: world.id, world };
   }
 
-  loadWorld(args: { worldData: string }): { worldId: string; world: any } {
+  async loadWorld(args: { worldData: string }): Promise<{ worldId: string; world: any }> {
     // AI passes back previously saved world data
     const world = JSON.parse(args.worldData);
-    this.worldManager.updateWorld(world.id, world);
+    await this.worldManager.updateWorld(world.id, world);
     return { worldId: world.id, world };
   }
 
@@ -184,16 +184,16 @@ export class ToolHandler {
     });
   }
 
-  listWorlds(): string[] {
-    return this.worldManager.listWorlds();
+  async listWorlds(): Promise<string[]> {
+    return await this.worldManager.listWorlds();
   }
 
-  deleteWorld(args: { worldId: string }): { success: boolean } {
-    this.worldManager.deleteWorld(args.worldId);
+  async deleteWorld(args: { worldId: string }): Promise<{ success: boolean }> {
+    await this.worldManager.deleteWorld(args.worldId);
     return { success: true };
   }
 
-  addPopulation(args: {
+  async addPopulation(args: {
     worldId: string;
     name: string;
     size: number;
@@ -203,7 +203,7 @@ export class ToolHandler {
     monsterType?: string;
     dangerLevel?: number;
     behavior?: string;
-  }): { success: boolean; populationId: string } {
+  }): Promise<{ success: boolean; populationId: string }> {
     const population: any = {
       id: `pop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name: args.name,
@@ -224,7 +224,7 @@ export class ToolHandler {
       population.isDormant = args.behavior === 'dormant';
     }
 
-    const success = this.worldManager.addPopulation(args.worldId, population);
+    const success = await this.worldManager.addPopulation(args.worldId, population);
     if (!success) {
       throw new Error(`World ${args.worldId} not found`);
     }
@@ -232,7 +232,7 @@ export class ToolHandler {
     return { success: true, populationId: population.id };
   }
 
-  createCraft(args: {
+  async createCraft(args: {
     worldId: string;
     name: string;
     description: string;
@@ -244,7 +244,7 @@ export class ToolHandler {
     location?: string;
     isHidden?: boolean;
     effects?: string[];
-  }): { success: boolean; craftId: string; craft: any } {
+  }): Promise<{ success: boolean; craftId: string; craft: any }> {
     const world = this.worldManager.getWorld(args.worldId);
     if (!world) {
       throw new Error(`World ${args.worldId} not found`);
@@ -309,18 +309,18 @@ export class ToolHandler {
     world.events.push(event);
     world.timeline.events.push(event);
 
-    this.worldManager.updateWorld(args.worldId, world);
+    await this.worldManager.updateWorld(args.worldId, world);
 
     return { success: true, craftId: craft.id, craft };
   }
 
-  completeQuest(args: {
+  async completeQuest(args: {
     worldId: string;
     questId: string;
     success: boolean;
     completionNotes?: string;
     failureReason?: string;
-  }): { success: boolean; quest: any } {
+  }): Promise<{ success: boolean; quest: any }> {
     const world = this.worldManager.getWorld(args.worldId);
     if (!world || !world.quests) {
       throw new Error(`World ${args.worldId} not found or no quests`);
@@ -365,7 +365,7 @@ export class ToolHandler {
     world.events.push(event);
     world.timeline.events.push(event);
 
-    this.worldManager.updateWorld(args.worldId, world);
+    await this.worldManager.updateWorld(args.worldId, world);
 
     return { success: true, quest };
   }
