@@ -20,6 +20,9 @@ export enum EventType {
   CRAFT_CREATION = 'craft_creation',
   CRAFT_DISCOVERY = 'craft_discovery',
   CRAFT_LOST = 'craft_lost',
+  QUEST_GENERATED = 'quest_generated',
+  QUEST_COMPLETED = 'quest_completed',
+  QUEST_FAILED = 'quest_failed',
 }
 
 export enum LocationType {
@@ -69,6 +72,48 @@ export enum CraftCategory {
   JEWELRY = 'jewelry',
   STRUCTURE = 'structure',
   RELIC = 'relic',
+}
+
+export enum QuestStatus {
+  OPEN = 'open',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  ABANDONED = 'abandoned',
+}
+
+export enum QuestType {
+  MONSTER_HUNT = 'monster_hunt',
+  DISEASE_CURE = 'disease_cure',
+  RESOURCE_RECOVERY = 'resource_recovery',
+  ARTIFACT_RETRIEVAL = 'artifact_retrieval',
+  PROTECTION = 'protection',
+  RECONCILIATION = 'reconciliation',
+  SURVIVAL = 'survival',
+  MYSTERY = 'mystery',
+}
+
+export interface Quest {
+  id: string;
+  title: string;
+  description: string;
+  type: QuestType;
+  status: QuestStatus;
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  originPopulationId: string;
+  relatedLocationId?: LocationId;
+  relatedMonsterId?: string; // If monster-related
+  relatedCraftId?: string; // If artifact-related
+  reward?: string;
+  requiredHeroes?: number; // Number of heroes needed
+  assignedHeroes: string[]; // Hero population IDs (empty = open for players)
+  deadline?: number; // Year by which it must be completed
+  failureConsequences: string;
+  successConsequences: string;
+  createdAt: number;
+  completedAt?: number;
+  failureReason?: string;
+  completionNotes?: string;
 }
 
 export enum CraftRarity {
@@ -185,6 +230,7 @@ export interface SocietyLayer {
   cultures: string[];
   technologies: string[];
   crafts: string[]; // IDs of all crafts in the world
+  quests: string[]; // IDs of all quests
   conflicts: {
     parties: string[];
     status: 'ongoing' | 'resolved' | 'potential';
@@ -230,6 +276,7 @@ export interface WorldState {
   locations: Location[];
   events: Event[];
   crafts: Craft[]; // All crafts in the world
+  quests: Quest[]; // All quests in the world
   timeline: Timeline;
   metadata: {
     createdAt: string;

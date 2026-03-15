@@ -384,6 +384,36 @@ const TOOLS: Tool[] = [
       required: ['worldId', 'name', 'description', 'category', 'rarity', 'requiredTechLevel', 'creatorPopulationId'],
     },
   },
+  {
+    name: 'completeQuest',
+    description: 'Mark a quest as completed or failed. Heroes (AI-controlled) or players can complete quests.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        worldId: {
+          type: 'string',
+          description: 'World ID',
+        },
+        questId: {
+          type: 'string',
+          description: 'Quest ID to complete',
+        },
+        success: {
+          type: 'boolean',
+          description: 'Whether the quest was successful',
+        },
+        completionNotes: {
+          type: 'string',
+          description: 'How the quest was completed (if successful)',
+        },
+        failureReason: {
+          type: 'string',
+          description: 'Why the quest failed (if failed)',
+        },
+      },
+      required: ['worldId', 'questId', 'success'],
+    },
+  },
 ];
 
 // Server instance - persists across tool calls
@@ -587,6 +617,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 craftId: result.craftId,
                 craft: result.craft,
                 message: `Created ${craftArgs.rarity} ${craftArgs.category}: ${craftArgs.name}`,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'completeQuest': {
+        const questArgs = args as any;
+        const result = toolHandler.completeQuest(questArgs);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                quest: result.quest,
+                message: `Quest ${questArgs.success ? 'completed' : 'failed'}: ${result.quest.title}`,
               }, null, 2),
             },
           ],

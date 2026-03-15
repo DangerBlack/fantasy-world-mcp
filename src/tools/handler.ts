@@ -4,7 +4,7 @@
 
 import { WorldManager } from '../core/worldManager';
 import { SimulationEngine } from '../simulation/engine';
-import { InitialConditions, SimulationParams, Craft, CraftCategory, CraftRarity } from '../types';
+import { InitialConditions, SimulationParams, Craft, CraftCategory, CraftRarity, Quest, QuestType, QuestStatus, EventType } from '../types';
 import { ExportFormatter } from '../utils/export';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -312,6 +312,62 @@ export class ToolHandler {
     this.worldManager.updateWorld(args.worldId, world);
 
     return { success: true, craftId: craft.id, craft };
+  }
+
+  completeQuest(args: {
+    worldId: string;
+    questId: string;
+    success: boolean;
+    completionNotes?: string;
+    failureReason?: string;
+  }): { success: boolean; quest: any } {
+    const world = this.worldManager.getWorld(args.worldId);
+    if (!world || !world.quests) {
+      throw new Error(`World ${args.worldId} not found or no quests`);
+    }
+
+    const questIndex = world.quests.findIndex(q => q.id === args.questId);
+    if (questIndex === -1) {
+      throw new Error(`Quest ${args.questId} not found`);
+    }
+
+    const quest = world.quests[questIndex];
+    quest.status = args.success ? QuestStatus.COMPLETED : QuestStatus.FAILED;
+    quest.completedAt = world.timestamp;
+    
+    if (args.success) {
+      quest.completionNotes = args.completionNotes;
+    } else {
+      quest.failureReason = args.failureReason;
+    }
+
+    // Create event
+    const eventType = args.success ? EventType.QUEST_COMPLETED : EventType.QUEST_FAILED;
+    const event = {
+      id: uuidv4(),
+      year: world.timestamp,
+      type: eventType,
+      title: args.success ? `Quest Completed: ${quest.title}` : `Quest Failed: ${quest.title}`,
+      description: args.success 
+        ? (quest.completionNotes || `${quest.title} has been completed successfully`)
+        : (args.failureReason || `${quest.title} has failed: ${quest.failureConsequences}`),
+      causes: [],
+      effects: [],
+      impact: {
+        society: [{
+          type: args.success ? 'create' as const : 'destroy' as const,
+          target: quest.title,
+          description: args.success ? quest.successConsequences : quest.failureConsequences,
+        }],
+      },
+    };
+    
+    world.events.push(event);
+    world.timeline.events.push(event);
+
+    this.worldManager.updateWorld(args.worldId, world);
+
+    return { success: true, quest };
   }
 
   private getSnapshotAt(world: any, year: number): any {

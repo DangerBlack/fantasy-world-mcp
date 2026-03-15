@@ -49,6 +49,10 @@ export class ExportFormatter {
       output.crafts = world.crafts;
     }
 
+    if (world.quests && world.quests.length > 0) {
+      output.quests = world.quests;
+    }
+
     return JSON.stringify(output, null, 2);
   }
 
@@ -226,6 +230,29 @@ export class ExportFormatter {
     }
     output += '\n';
 
+    // Active quests section
+    if (world.quests && world.quests.length > 0) {
+      const openQuests = world.quests.filter(q => q.status === 'open' || q.status === 'in_progress');
+      if (openQuests.length > 0) {
+        output += `## Active Quests (For Players)\n\n`;
+        for (const quest of openQuests) {
+          output += `### ${quest.title}\n`;
+          output += `- **Type:** ${quest.type}\n`;
+          output += `- **Urgency:** ${quest.urgency.toUpperCase()}\n`;
+          output += `- **Status:** ${quest.status}\n`;
+          output += `- **Deadline:** Year ${quest.deadline}\n`;
+          output += `- **Description:** ${quest.description}\n`;
+          if (quest.requiredHeroes && quest.requiredHeroes > 0) {
+            output += `- **Heroes Needed:** ${quest.requiredHeroes}\n`;
+          }
+          if (quest.reward) {
+            output += `- **Reward:** ${quest.reward}\n`;
+          }
+          output += '\n';
+        }
+      }
+    }
+
     if (options.includeLocations) {
       output += `## Location Details\n\n`;
       for (const loc of world.locations) {
@@ -249,6 +276,16 @@ export class ExportFormatter {
 
   private generateAdventureHooks(world: WorldState): string[] {
     const hooks: string[] = [];
+
+    // Quest-based hooks (highest priority)
+    if (world.quests && world.quests.length > 0) {
+      const openQuests = world.quests.filter(q => q.status === 'open' || q.status === 'in_progress');
+      for (const quest of openQuests) {
+        if (quest.urgency === 'critical') {
+          hooks.push(`CRITICAL: ${quest.title} - ${quest.description}`);
+        }
+      }
+    }
 
     // Monster-based hooks
     const monsters = world.society.populations.filter(p => p.race === 'monster') as any[];

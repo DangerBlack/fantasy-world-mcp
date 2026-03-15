@@ -19,6 +19,9 @@ import {
   MonsterType,
   MonsterBehavior,
   MonsterPopulation,
+  Quest,
+  QuestType,
+  QuestStatus,
 } from '../types';
 import { WorldManager } from '../core/worldManager';
 
@@ -169,6 +172,10 @@ export class SimulationEngine {
       const monsterEvents = this.checkMonsterActivity(world, currentYear, nextYear);
       events.push(...monsterEvents);
     }
+
+    // Quest generation (if populations face unsolvable problems)
+    const questEvents = this.checkQuestGeneration(world, currentYear, nextYear);
+    events.push(...questEvents);
 
     this.linkEventsCausally(world, events);
 
@@ -870,5 +877,201 @@ export class SimulationEngine {
     };
     
     return growthRates[monsterType] || 0.025;
+  }
+
+  private checkQuestGeneration(world: WorldState, currentYear: number, nextYear: number): Event[] {
+    const events: Event[] = [];
+    
+    if (!world.quests) {
+      world.quests = [];
+    }
+    if (!world.society.quests) {
+      world.society.quests = [];
+    }
+
+    // Check each civilization population for unsolvable problems
+    const civilizedPops = world.society.populations.filter(p => p.race !== 'monster');
+    
+    for (const population of civilizedPops) {
+      // Check for monster threats that population can't handle
+      const monsters = world.society.populations.filter(p => p.race === 'monster') as MonsterPopulation[];
+      for (const monster of monsters) {
+        const monsterThreatLevel = monster.dangerLevel || 5;
+        const populationDefense = this.calculatePopulationDefense(population);
+        
+        // If monster threat exceeds population defense, generate quest
+        if (monsterThreatLevel > populationDefense && this.rng.boolean(0.15)) {
+          const quest: Quest = this.createMonsterHuntQuest(world, population, monster, nextYear);
+          world.quests.push(quest);
+          world.society.quests.push(quest.id);
+          
+          events.push({
+            id: uuidv4(),
+            year: nextYear,
+            type: EventType.QUEST_GENERATED,
+            title: quest.title,
+            description: quest.description,
+            causes: [],
+            effects: [],
+            location: world.locations.find(l => l.inhabitants.includes(population.id))?.id,
+            impact: {
+              society: [{
+                type: 'create',
+                target: quest.title,
+                description: `Urgent quest: ${quest.urgency} priority`,
+              }],
+            },
+          });
+        }
+      }
+
+      // Check for disease/plague (random chance if population is large and dense)
+      if ((population.size > 500 && population.organization === 'kingdom') || population.organization === 'empire') {
+        if (this.rng.boolean(0.05)) {
+          const quest: Quest = this.createDiseaseCureQuest(world, population, nextYear);
+          world.quests.push(quest);
+          world.society.quests.push(quest.id);
+          
+          events.push({
+            id: uuidv4(),
+            year: nextYear,
+            type: EventType.QUEST_GENERATED,
+            title: quest.title,
+            description: quest.description,
+            causes: [],
+            effects: [],
+            impact: {
+              society: [{
+                type: 'create',
+                target: quest.title,
+                description: 'Plague threatens the population',
+              }],
+            },
+          });
+        }
+      }
+
+      // Check for resource scarcity
+      if (world.geography.resources[Resource.IRON] < 20 && this.rng.boolean(0.1)) {
+        const quest: Quest = this.createResourceRecoveryQuest(world, population, Resource.IRON, nextYear);
+        world.quests.push(quest);
+        world.society.quests.push(quest.id);
+        
+        events.push({
+          id: uuidv4(),
+          year: nextYear,
+          type: EventType.QUEST_GENERATED,
+          title: quest.title,
+          description: quest.description,
+          causes: [],
+          effects: [],
+          impact: {
+            resources: [{
+              type: 'decrease',
+              target: 'iron',
+              description: 'Critical shortage requires expedition',
+            }],
+          },
+        });
+      }
+    }
+
+    return events;
+  }
+
+  private calculatePopulationDefense(population: Population): number {
+    // Defense based on organization, tech level, and size
+    const orgDefense = ({
+      'nomadic': 1, 'tribal': 2, 'feudal': 4, 'kingdom': 6, 'empire': 8
+    }[population.organization] || 2);
+    
+    const techDefense = Math.floor(population.technologyLevel / 2);
+    const sizeDefense = population.size > 1000 ? 2 : population.size > 500 ? 1 : 0;
+    
+    return orgDefense + techDefense + sizeDefense;
+  }
+
+  private createMonsterHuntQuest(
+    world: WorldState,
+    population: Population,
+    monster: MonsterPopulation,
+    year: number
+  ): Quest {
+    const urgency = monster.dangerLevel >= 8 ? 'critical' : monster.dangerLevel >= 6 ? 'high' : 'medium';
+    const requiredHeroes = monster.dangerLevel >= 8 ? 5 : monster.dangerLevel >= 6 ? 3 : 1;
+    
+    return {
+      id: `quest_${uuidv4()}`,
+      title: `Eliminate the ${monster.monsterSubtype || monster.name}`,
+      description: `The ${monster.monsterSubtype} ${monster.name} (Danger: ${monster.dangerLevel}/10) has been raiding ${population.name}'s settlements. Their lair must be found and destroyed before more lives are lost.`,
+      type: QuestType.MONSTER_HUNT,
+      status: QuestStatus.OPEN,
+      urgency,
+      originPopulationId: population.id,
+      relatedMonsterId: monster.id,
+      relatedLocationId: monster.lairLocation,
+      reward: `The ${population.name} will reward heroes with gold, land, and honors`,
+      requiredHeroes: requiredHeroes,
+      assignedHeroes: [],
+      deadline: year + (urgency === 'critical' ? 10 : urgency === 'high' ? 25 : 50),
+      failureConsequences: `${monster.monsterSubtype} raids intensify, settlements destroyed, population decimated`,
+      successConsequences: `${population.name} gains security, heroes are celebrated, trade routes become safe`,
+      createdAt: year,
+    };
+  }
+
+  private createDiseaseCureQuest(world: WorldState, population: Population, year: number): Quest {
+    const diseases = [
+      'the Blazing Fever', 'the Wasting Plague', 'the Shadow Sickness', 'the Crimson Rot', 'the Bone Blight'
+    ];
+    const disease = this.rng.pick(diseases);
+    
+    return {
+      id: `quest_${uuidv4()}`,
+      title: `Cure ${disease}`,
+      description: `A terrible plague called ${disease} is sweeping through ${population.name}'s lands. Physicians are powerless. Heroes must find a cure in ancient texts, distant lands, or from mysterious healers.`,
+      type: QuestType.DISEASE_CURE,
+      status: QuestStatus.OPEN,
+      urgency: 'critical',
+      originPopulationId: population.id,
+      reward: 'The entire population will owe you their lives; vast rewards promised',
+      requiredHeroes: 2,
+      assignedHeroes: [],
+      deadline: year + 20,
+      failureConsequences: `${population.name} is decimated, cities become ghost towns`,
+      successConsequences: `${population.name} survives and honors heroes for generations`,
+      createdAt: year,
+    };
+  }
+
+  private createResourceRecoveryQuest(
+    world: WorldState,
+    population: Population,
+    resource: Resource,
+    year: number
+  ): Quest {
+    const resourceNames: Record<Resource, string> = {
+      [Resource.IRON]: 'iron', [Resource.GOLD]: 'gold', [Resource.SILVER]: 'silver',
+      [Resource.COPPER]: 'copper', [Resource.WOOD]: 'timber', [Resource.STONE]: 'stone',
+      [Resource.FOOD]: 'food', [Resource.WATER]: 'water', [Resource.MAGIC]: 'magical artifacts',
+      [Resource.GEMS]: 'precious gems',
+    };
+    
+    return {
+      id: `quest_${uuidv4()}`,
+      title: `Secure new ${resourceNames[resource]} sources`,
+      description: `${population.name}'s ${resource} reserves are critically depleted. Expeditions must venture into dangerous territories to find new sources or ancient caches.`,
+      type: QuestType.RESOURCE_RECOVERY,
+      status: QuestStatus.OPEN,
+      urgency: 'high',
+      originPopulationId: population.id,
+      reward: `Generous payment in ${resource} and land grants`,
+      requiredHeroes: 3,
+      assignedHeroes: [],
+      deadline: year + 40,
+      failureConsequences: `${population.name}'s economy collapses, technology regresses, weakness invites invasion`,
+      successConsequences: `${population.name} thrives, new trade routes established`,
+      createdAt: year,
+    };
   }
 }

@@ -276,6 +276,46 @@ Arguments:
 - "The legendary Sword of Dawn is lost. Ancient texts hint it may be hidden in an ancient battlefield."
 - Players can discover these during adventures
 
+### 9. Quest System
+
+The simulation automatically generates **serious quests** when populations face problems they cannot solve:
+
+**Auto-Generated Quest Types:**
+- **Monster Hunts**: When monster threat > population defense
+- **Disease Cures**: Plagues sweeping through large kingdoms/empires
+- **Resource Recovery**: Critical shortages (iron, magic, etc.)
+
+**Quest Properties:**
+- **Urgency**: low, medium, high, critical
+- **Deadline**: Year by which quest must be completed
+- **Heroes Needed**: Number of heroes required (0 = open for players)
+- **Consequences**: Clear failure/success outcomes
+
+**Example:**
+```
+CRITICAL QUEST: "Cure the Blazing Fever"
+- A terrible plague is sweeping through the kingdom
+- Physicians are powerless
+- Heroes must find a cure in ancient texts or distant lands
+- Deadline: 20 years
+- Failure: Kingdom decimated, cities become ghost towns
+- Success: Kingdom survives, heroes honored for generations
+```
+
+**Complete Quests:**
+```
+Tool: completeQuest
+Arguments:
+{
+  "worldId": "<world ID>",
+  "questId": "<quest ID>",
+  "success": true,
+  "completionNotes": "The heroes traveled to the Mountain Temple and retrieved the Sacred Herb"
+}
+```
+
+Quests appear in GM Notes exports and are prioritized by urgency. Critical quests are highlighted for immediate player attention.
+
 ## Example Workflow
 
 Here's a complete example of generating a fantasy setting:

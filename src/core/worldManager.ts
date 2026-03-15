@@ -203,12 +203,14 @@ export class WorldManager {
         cultures: [...new Set(initialPopulations.map(p => p.culture))],
         technologies: [],
         crafts: [],
+        quests: [],
         conflicts: [],
         tradeRoutes: [],
       },
       locations: initialLocations,
       events: initialEvents,
       crafts: [],
+      quests: [],
       timeline: {
         events: initialEvents,
         eras: [{
