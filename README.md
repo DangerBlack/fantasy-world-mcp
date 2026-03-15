@@ -227,6 +227,67 @@ Arguments:
 - `narrative`: Story-style chronicle
 - `gm_notes`: Game master reference with adventure hooks
 
+### 6b. Export World to File (For Large Worlds)
+
+When exporting worlds after long simulations (500+ years, 100+ events), the output may exceed token limits. Use file-based export instead:
+
+```
+Tool: exportWorldToFile
+Arguments:
+{
+  "worldId": "<world ID>",
+  "format": "gm_notes",
+  "includeTimeline": true,
+  "includeLocations": true,
+  "filePath": "exports/myworld_1524.md"  // Optional, default: exports/{worldId}_{timestamp}.{format}
+}
+```
+
+**What it does:**
+- Writes the export to a file in the `exports/` directory
+- Auto-creates the directory if it doesn't exist
+- Returns the file path and file size
+- Avoids token limit issues with large worlds
+
+**Default file paths:**
+- `exports/{worldId}_{timestamp}.md` (markdown)
+- `exports/{worldId}_{timestamp}.json` (JSON)
+- `exports/{worldId}_{timestamp}.narrative` (narrative)
+- `exports/{worldId}_{timestamp}.gm_notes` (GM notes)
+
+**Reading exported files:**
+
+```
+Tool: readExportFile
+Arguments:
+{
+  "filePath": "exports/myworld_1524.md",
+  "startLine": 1,
+  "endLine": 100  // Optional: read in chunks
+}
+```
+
+**Pagination options:**
+- `startLine`/`endLine`: Read specific line ranges (1-indexed)
+- `startByte`/`endByte`: Read specific byte ranges
+- Returns: `content`, `totalLines`, `totalBytes`, `lineRange`, `byteRange`, `hasMore`
+
+**Use case example:**
+```
+1. exportWorldToFile({ worldId: "abc-123", format: "gm_notes" })
+   → Returns: { filePath: "exports/abc-123_1524.gm_notes", size: 45000 }
+
+2. readExportFile({ filePath: "exports/abc-123_1524.gm_notes", startLine: 1, endLine: 50 })
+   → Returns first 50 lines + metadata (hasMore: true)
+
+3. readExportFile({ filePath: "exports/abc-123_1524.gm_notes", startLine: 51, endLine: 100 })
+   → Returns next 50 lines + metadata (hasMore: true)
+
+4. Continue until hasMore: false
+```
+
+This allows you to export and read massive worlds (10k+ tokens) without hitting MCP response limits.
+
 ### 7. Add Population
 
 Add new populations (including monsters) to an existing world:
