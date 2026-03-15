@@ -82,9 +82,15 @@ export const DeleteWorldSchema = z.object({
   worldId: z.string().describe('World ID to delete'),
 });
 
+// Load world from saved data
+export const LoadWorldSchema = z.object({
+  worldData: z.string().describe('JSON string of previously saved world data'),
+});
+
 // Export all schemas
 export const ToolSchemas = {
   initializeWorld: InitializeWorldSchema,
+  loadWorld: LoadWorldSchema,
   simulate: SimulateSchema,
   getWorldState: GetWorldStateSchema,
   getTimeline: GetTimelineSchema,

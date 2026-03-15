@@ -18,12 +18,18 @@ if (!taskId || !commitMessage) {
 }
 
 const tasksDir = path.join(__dirname, '..', 'tasks');
-const taskFile = path.join(tasksDir, `${taskId}.task.json`);
 
-if (!fs.existsSync(taskFile)) {
+// Find task file by ID prefix (e.g., "001" matches "001-load-world-tool.task.json")
+const matchingFiles = fs.readdirSync(tasksDir)
+  .filter(f => f.endsWith('.task.json') && f.startsWith(`${taskId}-`));
+
+if (matchingFiles.length === 0) {
   console.error(`Task not found: ${taskId}`);
   process.exit(1);
 }
+
+const actualFile = matchingFiles[0];
+const taskFile = path.join(tasksDir, actualFile);
 
 const task = JSON.parse(fs.readFileSync(taskFile, 'utf8'));
 
