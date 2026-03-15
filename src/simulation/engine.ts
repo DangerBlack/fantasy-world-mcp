@@ -911,6 +911,87 @@ export class SimulationEngine {
             },
           });
 
+          // Counter-attack: If target is hostile and has sufficient size, they fight back!
+          // This simulates dragon hunters, warriors, or organized resistance
+          if (target.relations[monster.id] === 'hostile' && target.size > 20 && this.rng.boolean(0.35)) {
+            // Calculate counter-attack damage based on target's size, organization, and tech
+            const attackBonus = Math.min(0.6, (target.size / 400) * 0.25);
+            const orgAttackBonus = ({
+              'nomadic': 0.1, 'tribal': 0.3, 'feudal': 0.5, 'kingdom': 0.7, 'empire': 0.9
+            }[target.organization] || 0);
+            const techAttackBonus = Math.floor(target.technologyLevel / 2) * 0.08;
+            const totalAttack = Math.min(0.95, attackBonus + orgAttackBonus + techAttackBonus);
+            
+            // Monster defense is lower than civilization defense
+            const monsterDefense = Math.min(0.5, (monster.size / 80) * 0.15 + 0.1);
+            
+            // Damage to monster - scaled to be meaningful
+            const monsterDamageBase = Math.floor(target.size * totalAttack * 1.2);
+            const monsterDamage = Math.max(1, Math.floor(monsterDamageBase * (1 - monsterDefense)));
+            monster.size = Math.max(0, monster.size - monsterDamage);
+
+            events.push({
+              id: uuidv4(),
+              year: nextYear,
+              type: EventType.CONFLICT,
+              title: `${target.name} Counter-attacks`,
+              description: `${target.name} fights back against ${monster.name}, inflicting ${monsterDamage} casualties`,
+              causes: [],
+              effects: [],
+              location: monster.lairLocation,
+              impact: {
+                society: [
+                  {
+                    type: 'decrease',
+                    target: monster.name,
+                    value: monsterDamage,
+                    description: 'Monster casualties from counter-attack',
+                  },
+                ],
+              },
+            });
+
+            // Chance to kill the monster if damage is significant and monster is weakened
+            if (monster.size <= 5 && this.rng.boolean(0.25)) {
+              // Monster defeated!
+              const monsterIndex = world.society.populations.findIndex(p => p.id === monster.id);
+              if (monsterIndex > -1) {
+                world.society.populations.splice(monsterIndex, 1);
+                
+                events.push({
+                  id: uuidv4(),
+                  year: nextYear,
+                  type: EventType.MONSTER_INVASION,
+                  title: `${monster.name} Defeated!`,
+                  description: `${target.name} has slain the legendary ${monster.name}! The threat is ended.`,
+                  causes: [],
+                  effects: [],
+                  location: monster.lairLocation,
+                  impact: {
+                    society: [
+                      {
+                        type: 'destroy',
+                        target: monster.name,
+                        description: 'Monster population eliminated',
+                      },
+                    ],
+                  },
+                });
+
+                // Remove monster quests
+                if (world.quests) {
+                  world.quests = world.quests.filter(q => q.relatedMonsterId !== monster.id);
+                }
+                if (world.society.quests) {
+                  world.society.quests = world.society.quests.filter(qid => {
+                    const quest = world.quests?.find(q => q.id === qid);
+                    return quest?.relatedMonsterId !== monster.id;
+                  });
+                }
+              }
+            }
+          }
+
           // Chance to turn location into ruins
           const targetLocation = world.locations.find(l => l.inhabitants.includes(target.id));
           if (targetLocation && targetLocation.type === 'city' && this.rng.boolean(0.1)) {
