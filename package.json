@@ -10,9 +10,9 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "test": "npm run build && node dist/test.js",
-    "tasks": "node scripts/list-tasks.js",
-    "task:transition": "node scripts/transition.js",
-    "task:complete": "node scripts/complete.js"
+    "tasks": "node scripts/list-tasks.cjs",
+    "task:transition": "node scripts/transition.cjs",
+    "task:complete": "node scripts/complete.cjs"
   },
   "keywords": ["mcp", "dnd", "world-generation", "procedural", "fantasy"],
   "author": "",
