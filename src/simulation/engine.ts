@@ -25,6 +25,8 @@ import {
   Craft,
   CraftCategory,
   CraftRarity,
+  Belief,
+  DeityDomain,
 } from '../types';
 import { WorldManager } from '../core/worldManager';
 
@@ -156,6 +158,30 @@ export class SimulationEngine {
     if (params.enableConflict && params.complexity !== 'simple') {
       const conflictEvents = this.checkConflictGeneration(world, currentYear, nextYear);
       events.push(...conflictEvents);
+      
+      // Religious conflicts
+      const religiousConflict = this.checkReligiousConflict(world, nextYear);
+      if (religiousConflict) {
+        religiousConflict.pop1.relations[religiousConflict.pop2.id] = 'hostile';
+        religiousConflict.pop2.relations[religiousConflict.pop1.id] = 'hostile';
+        
+        events.push({
+          id: uuidv4(),
+          year: nextYear,
+          type: EventType.HERESY,
+          title: 'Religious Conflict',
+          description: `${religiousConflict.pop1.name} and ${religiousConflict.pop2.name} enter conflict over ${religiousConflict.beliefConflict}`,
+          causes: [],
+          effects: [],
+          impact: {
+            society: [{
+              type: 'transform',
+              target: 'relations',
+              description: `Religious war: ${religiousConflict.beliefConflict}`,
+            }],
+          },
+        });
+      }
     }
 
     if (params.enableMigration && params.complexity !== 'simple') {
@@ -185,6 +211,34 @@ export class SimulationEngine {
     if (params.complexity !== 'simple') {
       const craftEvents = this.checkCraftGeneration(world, currentYear, nextYear);
       events.push(...craftEvents);
+      
+      // Religious crafts (blessed items, relics)
+      for (const population of world.society.populations.filter(p => p.race !== 'monster')) {
+        if (population.beliefs.length > 0 && this.rng.boolean(0.08)) {
+          const craft = this.generateReligiousCraft(world, population, nextYear);
+          if (craft) {
+            world.crafts.push(craft);
+            world.society.crafts.push(craft.id);
+            
+            events.push({
+              id: uuidv4(),
+              year: nextYear,
+              type: EventType.CRAFT_CREATION,
+              title: `Holy Item Created`,
+              description: `${population.name} creates ${craft.name}, blessed by ${population.dominantBelief ? world.beliefs.find(b => b.id === population.dominantBelief)?.name : 'their faith'}`,
+              causes: [],
+              effects: [],
+              impact: {
+                society: [{
+                  type: 'create',
+                  target: craft.name,
+                  description: `Religious artifact: ${craft.rarity}`,
+                }],
+              },
+            });
+          }
+        }
+      }
     }
 
     this.linkEventsCausally(world, events);
@@ -928,7 +982,10 @@ export class SimulationEngine {
             'trade_post': 0.15,     // Some fortification, guards
           }[targetLocation?.type || 'settlement'] || 0.1);
           
-          const totalDefense = Math.min(0.95, defenseBonus + organizationBonus + locationBonus);
+          // Faith-based defense bonus
+          const faithBonus = this.calculateFaithDefenseBonus(world, target, targetLocation);
+          
+          const totalDefense = Math.min(0.95, defenseBonus + organizationBonus + locationBonus + faithBonus);
           
           // Raid damage based on danger level - monsters with higher danger are exponentially more deadly
           // Base damage scales with danger level (not just monster.size)
@@ -1357,6 +1414,33 @@ export class SimulationEngine {
                 type: 'create',
                 target: quest.title,
                 description: `Contextual quest generated: ${quest.urgency} priority`,
+              }],
+            },
+          });
+        }
+      }
+      
+      // Religious quests (6% chance for populations with beliefs)
+      if (population.dominantBelief && this.rng.boolean(0.06)) {
+        const quest = this.generateReligiousQuest(world, population, nextYear);
+        if (quest) {
+          world.quests.push(quest);
+          world.society.quests.push(quest.id);
+          
+          events.push({
+            id: uuidv4(),
+            year: nextYear,
+            type: EventType.PILGRIMAGE,
+            title: quest.title,
+            description: quest.description,
+            causes: [],
+            effects: [],
+            location: quest.relatedLocationId,
+            impact: {
+              society: [{
+                type: 'create',
+                target: quest.title,
+                description: `Religious quest: ${quest.urgency} priority`,
               }],
             },
           });
@@ -2056,5 +2140,247 @@ export class SimulationEngine {
       isHidden: false,
       history: [`Discovered in year ${year}`],
     };
+  }
+
+  private calculateFaithDefenseBonus(world: WorldState, population: Population, location?: Location): number {
+    if (!population.dominantBelief) return 0;
+    
+    const belief = world.beliefs.find(b => b.id === population.dominantBelief);
+    if (!belief) return 0;
+    
+    let bonus = 0;
+    
+    // Organized religion with war domain gives holy warriors/courage
+    if (belief.isOrganized && belief.domains.includes(DeityDomain.WAR)) {
+      bonus += 0.15;
+    }
+    
+    // Holy site at location provides divine protection
+    if (location && belief.holySites.includes(location.id)) {
+      bonus += 0.10;
+    }
+    
+    // High religious tolerance reduces internal conflict
+    if (population.religiousTolerance === 'pluralistic') {
+      bonus += 0.05;
+    }
+    
+    return Math.min(0.25, bonus); // Max +0.25 defense bonus
+  }
+
+  private generateReligiousQuest(world: WorldState, population: Population, year: number): Quest | null {
+    if (!population.dominantBelief) return null;
+    
+    const belief = world.beliefs.find(b => b.id === population.dominantBelief);
+    if (!belief) return null;
+    
+    const questTypes = ['pilgrimage', 'temple_restore', 'heresy', 'relic'] as const;
+    type QuestTypeType = typeof questTypes[number];
+    const questType = this.rng.pick(questTypes as unknown as QuestTypeType[]);
+    
+    switch (questType) {
+      case 'pilgrimage': {
+        // Find a distant holy site
+        const distantSites = belief.holySites.filter(sid => sid !== world.locations[0]?.id);
+        const targetLocation = distantSites.length > 0 
+          ? world.locations.find(l => l.id === distantSites[0])
+          : world.locations.find(l => l.type === LocationType.TEMPLE && l.id !== world.locations[0]?.id);
+        
+        return {
+          id: `quest_${uuidv4()}`,
+          title: `Pilgrimage to Sacred Site`,
+          description: `${belief.name} requires a pilgrimage to restore the holy connection. Travel to the sacred location and perform the ancient rites.`,
+          type: QuestType.PILGRIMAGE,
+          status: QuestStatus.OPEN,
+          urgency: 'medium',
+          originPopulationId: population.id,
+          relatedLocationId: targetLocation?.id,
+          reward: 'Divine blessing and renewed faith for the population',
+          requiredHeroes: 2,
+          assignedHeroes: [],
+          deadline: year + 30,
+          failureConsequences: 'The faith weakens, divine protection fades',
+          successConsequences: 'The holy site is renewed, faith is strengthened',
+          createdAt: year,
+        };
+      }
+      
+      case 'temple_restore': {
+        // Find destroyed/damaged temple
+        const ruinedTemples = world.locations.filter(l => l.type === LocationType.RUINS && l.features.some(f => f.includes('temple') || f.includes('holy')));
+        const target = ruinedTemples.length > 0 ? ruinedTemples[0] : null;
+        
+        return {
+          id: `quest_${uuidv4()}`,
+          title: `Restore the Holy Temple`,
+          description: `The sacred temple of ${belief.name} lies in ruins. Heroes must rebuild the holy site and cleanse it of corruption.`,
+          type: QuestType.TEMPLE_RESTORE,
+          status: QuestStatus.OPEN,
+          urgency: 'high',
+          originPopulationId: population.id,
+          relatedLocationId: target?.id,
+          reward: 'A consecrated temple, center of faith and healing',
+          requiredHeroes: 3,
+          assignedHeroes: [],
+          deadline: year + 50,
+          failureConsequences: 'The holy site remains desecrated, faith wanes',
+          successConsequences: 'The temple is restored, becoming a beacon of faith',
+          createdAt: year,
+        };
+      }
+      
+      case 'heresy': {
+        // Evil/chaotic belief spreading
+        const evilBeliefs = world.beliefs.filter(b => b.alignment === 'evil' || b.alignment === 'chaotic');
+        if (evilBeliefs.length === 0) return null;
+        
+        const evilBelief = this.rng.pick(evilBeliefs);
+        return {
+          id: `quest_${uuidv4()}`,
+          title: `Suppress the Heretical Cult`,
+          description: `The corrupting influence of ${evilBelief.name} spreads among the people. Heroes must root out the heretics and restore true faith.`,
+          type: QuestType.HERESY_SUPPRESS,
+          status: QuestStatus.OPEN,
+          urgency: 'critical',
+          originPopulationId: population.id,
+          reward: 'Protection from corruption, divine favor',
+          requiredHeroes: 4,
+          assignedHeroes: [],
+          deadline: year + 20,
+          failureConsequences: 'The heresy spreads, corrupting the population',
+          successConsequences: 'The cult is destroyed, faith is purified',
+          createdAt: year,
+        };
+      }
+      
+      case 'relic': {
+        // Lost sacred item
+        return {
+          id: `quest_${uuidv4()}`,
+          title: `Recover the Lost Relic`,
+          description: `The sacred relic of ${belief.deityName || belief.name} was lost long ago. It lies hidden in a dangerous location, waiting to be reclaimed.`,
+          type: QuestType.ARTIFACT_RETRIEVAL,
+          status: QuestStatus.OPEN,
+          urgency: 'medium',
+          originPopulationId: population.id,
+          reward: 'A holy artifact of immense power',
+          requiredHeroes: 3,
+          assignedHeroes: [],
+          deadline: year + 40,
+          failureConsequences: 'The relic remains lost, divine connection weakened',
+          successConsequences: 'The relic is restored, bringing blessings to all followers',
+          createdAt: year,
+        };
+      }
+    }
+  }
+
+  private generateReligiousCraft(world: WorldState, population: Population, year: number): Craft | null {
+    if (population.beliefs.length === 0) return null;
+    
+    const belief = world.beliefs.find(b => b.id === population.dominantBelief);
+    if (!belief) return null;
+    
+    // Determine craft type based on belief domains
+    const domain = belief.domains[0];
+    const categoryMap: Partial<Record<DeityDomain, CraftCategory>> = {
+      [DeityDomain.WAR]: CraftCategory.WEAPON,
+      [DeityDomain.HEALING]: CraftCategory.ARTIFACT,
+      [DeityDomain.KNOWLEDGE]: CraftCategory.BOOK,
+      [DeityDomain.NATURE]: CraftCategory.ARMOR,
+      [DeityDomain.FIRE]: CraftCategory.TOOL,
+      [DeityDomain.LIGHT]: CraftCategory.JEWELRY,
+      [DeityDomain.DARKNESS]: CraftCategory.ARTIFACT,
+      [DeityDomain.DEATH]: CraftCategory.RELIC,
+    };
+    
+    const category = categoryMap[domain] || CraftCategory.RELIC;
+    
+    // Religious items are higher rarity
+    const rarities = [CraftRarity.UNCOMMON, CraftRarity.RARE, CraftRarity.LEGENDARY];
+    const rarity = this.rng.pick(rarities);
+    
+    const names: Record<CraftCategory, string[]> = {
+      [CraftCategory.WEAPON]: ['Blessed Blade', 'Holy Sword', 'Divine Spear', 'Consecrated Axe'],
+      [CraftCategory.ARMOR]: ['Plate of Faith', 'Shield of Protection', 'Robes of Piety'],
+      [CraftCategory.ARTIFACT]: ['Holy Orb', 'Sacred Chalice', 'Divine Prism'],
+      [CraftCategory.BOOK]: ['Tome of Wisdom', 'Book of Saints', 'Scripture of Truth'],
+      [CraftCategory.JEWELRY]: ['Ring of Blessings', 'Amulet of Faith', 'Crown of Devotion'],
+      [CraftCategory.RELIC]: ['Relic of Saints', 'Sacred Bone', 'Holy Fragment'],
+      [CraftCategory.TOOL]: ['Blessed Hammer', 'Consecrated Tools', 'Holy Anvil'],
+      [CraftCategory.STRUCTURE]: ['Shrine of Faith', 'Chapel of Light'],
+    };
+    
+    const name = this.rng.pick(names[category] || names[CraftCategory.RELIC]);
+    
+    const descriptions: Record<CraftCategory, string> = {
+      [CraftCategory.WEAPON]: 'A weapon blessed by divine powers, effective against evil',
+      [CraftCategory.ARMOR]: 'Armor imbued with protective magic from the gods',
+      [CraftCategory.ARTIFACT]: 'A powerful artifact channeling divine energy',
+      [CraftCategory.BOOK]: 'Sacred text containing ancient wisdom and prayers',
+      [CraftCategory.JEWELRY]: 'A precious item blessed by holy priests',
+      [CraftCategory.RELIC]: 'A sacred object of immense spiritual power',
+      [CraftCategory.TOOL]: 'Tools blessed for sacred work',
+      [CraftCategory.STRUCTURE]: 'A sacred structure dedicated to the divine',
+    };
+    
+    const description = `${descriptions[category] || 'A holy item'}. Created in devotion to ${belief.name}.`;
+    
+    const effects: string[] = rarity === CraftRarity.LEGENDARY 
+      ? ['Divine protection', 'Blessed against evil']
+      : rarity === CraftRarity.RARE
+      ? ['Minor divine blessing']
+      : ['Blessed item'];
+    
+    return {
+      id: `craft_${uuidv4()}`,
+      name: String(name),
+      description: String(description),
+      category,
+      rarity,
+      requiredTechLevel: Math.max(3, population.technologyLevel),
+      requiredResources: { [Resource.GEMS]: 10, [Resource.GOLD]: 5 },
+      creatorPopulationId: population.id,
+      creationYear: year,
+      location: world.locations.find(l => l.inhabitants.includes(population.id))?.id,
+      effects,
+      isHidden: false,
+      history: [`Created by ${population.name} in devotion to ${belief.name}`],
+    };
+  }
+
+  private checkReligiousConflict(world: WorldState, year: number): { pop1: Population; pop2: Population; beliefConflict: string } | null {
+    const civilizedPops = world.society.populations.filter(p => p.race !== 'monster' && p.dominantBelief);
+    
+    if (civilizedPops.length < 2) return null;
+    
+    for (const pop1 of civilizedPops) {
+      for (const pop2 of civilizedPops) {
+        if (pop1.id === pop2.id) continue;
+        
+        const belief1 = world.beliefs.find(b => b.id === pop1.dominantBelief);
+        const belief2 = world.beliefs.find(b => b.id === pop2.dominantBelief);
+        
+        if (!belief1 || !belief2) continue;
+        
+        // Different beliefs with intolerance
+        if (belief1.id !== belief2.id) {
+          const conflictChance = 
+            (pop1.religiousTolerance === 'intolerant' || pop2.religiousTolerance === 'intolerant') ? 0.3 :
+            (belief1.alignment !== belief2.alignment && (belief1.alignment === 'evil' || belief2.alignment === 'evil')) ? 0.2 :
+            0.05;
+          
+          if (this.rng.boolean(conflictChance)) {
+            return {
+              pop1,
+              pop2,
+              beliefConflict: `${belief1.name} vs ${belief2.name}`,
+            };
+          }
+        }
+      }
+    }
+    
+    return null;
   }
 }

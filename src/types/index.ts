@@ -23,6 +23,10 @@ export enum EventType {
   QUEST_GENERATED = 'quest_generated',
   QUEST_COMPLETED = 'quest_completed',
   QUEST_FAILED = 'quest_failed',
+  RELIGIOUS_EVENT = 'religious_event',
+  TEMPLE_BUILT = 'temple_built',
+  HERESY = 'heresy',
+  PILGRIMAGE = 'pilgrimage',
 }
 
 export enum LocationType {
@@ -91,6 +95,52 @@ export enum QuestType {
   RECONCILIATION = 'reconciliation',
   SURVIVAL = 'survival',
   MYSTERY = 'mystery',
+  PILGRIMAGE = 'pilgrimage',
+  TEMPLE_RESTORE = 'temple_restore',
+  HERESY_SUPPRESS = 'heresy_suppress',
+}
+
+export enum BeliefType {
+  PANTHEON = 'pantheon',
+  MONOTHEISM = 'monotheism',
+  ANIMISM = 'animism',
+  PHILOSOPHY = 'philosophy',
+  CULT = 'cult',
+  FOLK = 'folk',
+}
+
+export enum DeityDomain {
+  WAR = 'war',
+  LOVE = 'love',
+  DEATH = 'death',
+  NATURE = 'nature',
+  TRICKERY = 'trickery',
+  KNOWLEDGE = 'knowledge',
+  HEALING = 'healing',
+  FIRE = 'fire',
+  SEA = 'sea',
+  SKY = 'sky',
+  DARKNESS = 'darkness',
+  LIGHT = 'light',
+  FORTRESS = 'fortress',
+  TRADE = 'trade',
+}
+
+export interface Belief {
+  id: string;
+  type: BeliefType;
+  name: string;
+  deityName?: string;
+  domains: DeityDomain[];
+  description: string;
+  holySites: LocationId[];
+  practices: string[];
+  taboos: string[];
+  alignment: 'good' | 'neutral' | 'evil' | 'chaotic' | 'lawful';
+  followers: string[];
+  foundedYear: number;
+  isOrganized: boolean;
+  holyText?: string;
 }
 
 export interface Quest {
@@ -204,7 +254,9 @@ export interface Population {
   culture: string;
   technologyLevel: number; // 0-10 scale
   organization: 'nomadic' | 'tribal' | 'feudal' | 'kingdom' | 'empire';
-  beliefs: string[];
+  beliefs: string[]; // Belief IDs
+  dominantBelief?: string; // Primary belief system
+  religiousTolerance: 'intolerant' | 'tolerant' | 'pluralistic';
   relations: Record<string, 'hostile' | 'neutral' | 'friendly' | 'allied'>;
   crafts: string[]; // IDs of crafts created/owned by this population
   // Monster-specific fields (optional)
@@ -277,6 +329,7 @@ export interface WorldState {
   events: Event[];
   crafts: Craft[]; // All crafts in the world
   quests: Quest[]; // All quests in the world
+  beliefs: Belief[]; // All beliefs in the world
   timeline: Timeline;
   metadata: {
     createdAt: string;

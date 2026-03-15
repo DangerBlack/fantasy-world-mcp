@@ -22,6 +22,9 @@ import {
   Timeline,
   MonsterType,
   MonsterBehavior,
+  Belief,
+  BeliefType,
+  DeityDomain,
 } from '../types';
 
 export class WorldManager {
@@ -58,6 +61,7 @@ export class WorldManager {
       technologyLevel: 1,
       organization: pop.organization,
       beliefs: [],
+      religiousTolerance: 'tolerant',
       relations: {},
       crafts: [],
     }));
@@ -178,6 +182,7 @@ export class WorldManager {
           technologyLevel: 0,
           organization: 'tribal',
           beliefs: [],
+          religiousTolerance: 'tolerant',
           relations: {},
           crafts: [],
           monsterType,
@@ -211,6 +216,7 @@ export class WorldManager {
       events: initialEvents,
       crafts: [],
       quests: [],
+      beliefs: [],
       timeline: {
         events: initialEvents,
         eras: [{
@@ -228,8 +234,152 @@ export class WorldManager {
       },
     };
 
+    // Generate beliefs for civilization populations
+    for (const pop of initialPopulations) {
+      if (pop.race === 'monster') continue;
+      
+      // 50% chance to generate a belief at start
+      if (this.rng.boolean(0.5)) {
+        const belief = this.generateBelief(world, pop, 0);
+        pop.beliefs.push(belief.id);
+        pop.dominantBelief = belief.id;
+        pop.religiousTolerance = this.generateReligiousTolerance(pop, belief);
+      }
+    }
+
     this.worlds.set(worldId, world);
     return world;
+  }
+
+  private generateBelief(world: WorldState, population: Population, year: number): Belief {
+    const beliefTypes = Object.values(BeliefType);
+    const domains = Object.values(DeityDomain);
+    
+    // Determine belief type based on race/culture
+    let beliefType: BeliefType;
+    const race = population.race.toLowerCase();
+    
+    if (race.includes('dwarf')) {
+      beliefType = BeliefType.MONOTHEISM;
+    } else if (race.includes('elf')) {
+      beliefType = BeliefType.ANIMISM;
+    } else if (race.includes('orc') || race.includes('goblin')) {
+      beliefType = BeliefType.CULT;
+    } else if (race.includes('human')) {
+      beliefType = this.rng.boolean(0.5) ? BeliefType.PANTHEON : BeliefType.PHILOSOPHY;
+    } else {
+      beliefType = this.rng.pick(beliefTypes);
+    }
+    
+    // Generate belief name and details
+    const beliefNames: Record<BeliefType, string[]> = {
+      [BeliefType.PANTHEON]: ['The Pantheon of the Ancients', 'The Divine Circle', 'The Eternal Council'],
+      [BeliefType.MONOTHEISM]: ['The One Truth', 'The Eternal Flame', 'The Stone Father', 'The Forest Mother'],
+      [BeliefType.ANIMISM]: ['Spirit Ways', 'The Living Land', 'Ancestral Spirits'],
+      [BeliefType.PHILOSOPHY]: ['The Path of Balance', 'The Golden Rule', 'The Way of Reason'],
+      [BeliefType.CULT]: ['The Strength Doctrine', 'The Blood Oath', 'The Dark Pact'],
+      [BeliefType.FOLK]: ['Old Traditions', 'Village Ways', 'Ancestor Honor'],
+    };
+    
+    const name = this.rng.pick(beliefNames[beliefType]);
+    
+    // Select domains based on belief type
+    const domainCount = beliefType === BeliefType.PANTHEON ? 3 : beliefType === BeliefType.MONOTHEISM ? 2 : 1;
+    const selectedDomains: DeityDomain[] = [];
+    const availableDomains = [...domains];
+    
+    for (let i = 0; i < domainCount && availableDomains.length > 0; i++) {
+      const idx = this.rng.nextInt(0, availableDomains.length - 1);
+      selectedDomains.push(availableDomains[idx]);
+      availableDomains.splice(idx, 1);
+    }
+    
+    // Add race-specific domains
+    if (race.includes('dwarf')) {
+      if (!selectedDomains.includes(DeityDomain.FORTRESS)) selectedDomains[0] = DeityDomain.FORTRESS;
+      if (!selectedDomains.includes(DeityDomain.WAR)) selectedDomains[1] = DeityDomain.WAR;
+    } else if (race.includes('elf')) {
+      if (!selectedDomains.includes(DeityDomain.NATURE)) selectedDomains[0] = DeityDomain.NATURE;
+    } else if (race.includes('orc')) {
+      if (!selectedDomains.includes(DeityDomain.WAR)) selectedDomains[0] = DeityDomain.WAR;
+    }
+    
+    const alignment = beliefType === BeliefType.CULT ? (this.rng.boolean(0.6) ? 'evil' : 'chaotic') :
+                      beliefType === BeliefType.PHILOSOPHY ? 'neutral' :
+                      this.rng.pick(['good', 'neutral', 'lawful'] as const);
+    
+    const belief: Belief = {
+      id: `belief_${uuidv4()}`,
+      type: beliefType,
+      name,
+      deityName: beliefType === BeliefType.MONOTHEISM ? this.rng.pick(['Thorin', 'Aelindra', 'Gorm', 'Sylvara']) : undefined,
+      domains: selectedDomains,
+      description: `${name} teaches its followers to ${selectedDomains[0]} above all else.`,
+      holySites: [],
+      practices: ['daily prayers', 'sacred rituals', 'community gatherings'],
+      taboos: ['desecration of holy sites', 'breaking oaths'],
+      alignment,
+      followers: [population.id],
+      foundedYear: year,
+      isOrganized: beliefType === BeliefType.PANTHEON || beliefType === BeliefType.MONOTHEISM || beliefType === BeliefType.PHILOSOPHY,
+      holyText: beliefType === BeliefType.PHILOSOPHY ? 'The Book of Wisdom' : undefined,
+    };
+    
+    world.beliefs.push(belief);
+    return belief;
+  }
+
+  private generateReligiousTolerance(population: Population, belief: Belief): 'intolerant' | 'tolerant' | 'pluralistic' {
+    if (belief.alignment === 'evil' || belief.type === BeliefType.CULT) {
+      return this.rng.boolean(0.6) ? 'intolerant' : 'tolerant';
+    }
+    if (belief.type === BeliefType.PHILOSOPHY) {
+      return 'pluralistic';
+    }
+    return this.rng.pick(['tolerant', 'tolerant', 'pluralistic', 'intolerant'] as const);
+  }
+
+  private createTempleLocation(world: WorldState, belief: Belief, population: Population, year: number): Location {
+    const location: Location = {
+      id: uuidv4(),
+      type: LocationType.TEMPLE,
+      name: `${belief.name.split(' ')[0]} ${this.rng.pick(['Temple', 'Sanctuary', 'Shrine', 'Keep'])}`,
+      description: `A sacred ${belief.type} dedicated to ${belief.domains[0]}`,
+      geography: {},
+      inhabitants: [],
+      history: [],
+      features: ['holy altar', 'prayer chambers', 'sacred relics'],
+      connections: world.locations.map(l => l.id),
+      dangerLevel: 0,
+      complexity: 3,
+    };
+    
+    belief.holySites.push(location.id);
+    world.locations.push(location);
+    
+    // Add temple event
+    const event: Event = {
+      id: uuidv4(),
+      year,
+      type: EventType.TEMPLE_BUILT,
+      title: `${location.name} Constructed`,
+      description: `${population.name} builds a temple to their gods`,
+      causes: [],
+      effects: [],
+      location: location.id,
+      impact: {
+        society: [{
+          type: 'create',
+          target: location.name,
+          description: `Holy site established for ${belief.name}`,
+        }],
+      },
+    };
+    
+    world.events.push(event);
+    world.timeline.events.push(event);
+    
+    return location;
   }
 
   getWorld(worldId: string): WorldState | undefined {
