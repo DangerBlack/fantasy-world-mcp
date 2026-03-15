@@ -45,6 +45,10 @@ export class ExportFormatter {
       output.locations = world.locations;
     }
 
+    if (world.crafts && world.crafts.length > 0) {
+      output.crafts = world.crafts;
+    }
+
     return JSON.stringify(output, null, 2);
   }
 
@@ -144,7 +148,12 @@ export class ExportFormatter {
     output += `## Quick Reference\n\n`;
     output += `- **Current Year:** ${world.timestamp}\n`;
     output += `- **Terrain:** ${world.geography.terrain}\n`;
-    output += `- **Populations:** ${world.society.populations.map(p => p.name).join(', ')}\n`;
+    const civilizedPops = world.society.populations.filter(p => p.race !== 'monster');
+    const monsters = world.society.populations.filter(p => p.race === 'monster');
+    output += `- **Populations:** ${civilizedPops.map(p => p.name).join(', ')}\n`;
+    if (monsters.length > 0) {
+      output += `- **Monster Threats:** ${monsters.map(m => `${m.monsterSubtype} (${m.dangerLevel}/10)`).join(', ')}\n`;
+    }
     output += `- **Locations:** ${world.locations.map(l => l.name).join(', ')}\n\n`;
 
     output += `## Population Status\n\n`;
@@ -153,8 +162,51 @@ export class ExportFormatter {
       output += `- Size: ${pop.size}\n`;
       output += `- Org: ${pop.organization}\n`;
       output += `- Tech: ${pop.technologyLevel}\n`;
+      if (pop.race === 'monster') {
+        output += `- **Type:** ${pop.monsterSubtype}\n`;
+        output += `- **Danger:** ${pop.dangerLevel}/10\n`;
+        output += `- **Behavior:** ${pop.behavior}\n`;
+        output += `- **Dormant:** ${pop.isDormant ? 'Yes' : 'No'}\n`;
+      }
       output += `- Relations: ${Object.entries(pop.relations).map(([k, v]) => `${k}: ${v}`).join(', ')}\n`;
-      output += `- Techs: ${world.society.technologies.join(', ')}\n\n`;
+      output += `- Techs: ${world.society.technologies.join(', ')}\n`;
+      if (pop.crafts && pop.crafts.length > 0) {
+        const popCrafts = world.crafts?.filter(c => c.creatorPopulationId === pop.id) || [];
+        output += `- Crafts: ${popCrafts.map(c => c.name).join(', ')}\n`;
+      }
+      output += '\n';
+    }
+
+    output += `## Heritage & Crafts\n\n`;
+    if (world.crafts && world.crafts.length > 0) {
+      const visibleCrafts = world.crafts.filter(c => !c.isHidden);
+      const hiddenCrafts = world.crafts.filter(c => c.isHidden);
+      
+      if (visibleCrafts.length > 0) {
+        output += `### Known Items\n\n`;
+        for (const craft of visibleCrafts) {
+          output += `- **${craft.name}** (${craft.rarity}, ${craft.category})\n`;
+          output += `  - ${craft.description}\n`;
+          if (craft.effects && craft.effects.length > 0) {
+            output += `  - Effects: ${craft.effects.join(', ')}\n`;
+          }
+          output += `  - Created: Year ${craft.creationYear}\n\n`;
+        }
+      }
+      
+      if (hiddenCrafts.length > 0) {
+        output += `### Lost/Hidden Heritage (DM Only)\n\n`;
+        for (const craft of hiddenCrafts) {
+          output += `- **${craft.name}** (${craft.rarity}, ${craft.category})\n`;
+          output += `  - ${craft.description}\n`;
+          if (craft.effects && craft.effects.length > 0) {
+            output += `  - Effects: ${craft.effects.join(', ')}\n`;
+          }
+          output += `  - Status: HIDDEN - Location unknown\n\n`;
+        }
+      }
+    } else {
+      output += 'No notable crafts or heritage items yet.\n\n';
     }
 
     output += `## Conflict Tracker\n\n`;
@@ -198,6 +250,34 @@ export class ExportFormatter {
   private generateAdventureHooks(world: WorldState): string[] {
     const hooks: string[] = [];
 
+    // Monster-based hooks
+    const monsters = world.society.populations.filter(p => p.race === 'monster') as any[];
+    for (const monster of monsters) {
+      if (monster.isDormant) {
+        hooks.push(`The ${monster.monsterSubtype} sleeps beneath ${monster.lairLocation ? 'the ruins' : 'the mountains'} - but something might wake it.`);
+      } else {
+        hooks.push(`${monster.monsterSubtype} ${monster.name} (Danger: ${monster.dangerLevel}/10) is terrorizing the region. Their lair must be destroyed.`);
+      }
+    }
+
+    // Craft/Heritage-based hooks
+    if (world.crafts && world.crafts.length > 0) {
+      const hiddenCrafts = world.crafts.filter(c => c.isHidden);
+      const visibleCrafts = world.crafts.filter(c => !c.isHidden);
+      
+      // Hidden heritage hooks
+      for (const craft of hiddenCrafts) {
+        hooks.push(`The legendary ${craft.name} (${craft.rarity}) is lost. Ancient texts hint it may be hidden in ${craft.category === 'weapon' ? 'an ancient battlefield' : 'a forgotten tomb'}.`);
+      }
+      
+      // Visible craft hooks
+      for (const craft of visibleCrafts) {
+        if (craft.rarity === 'legendary' || craft.rarity === 'mythic') {
+          hooks.push(`The ${craft.name} has been discovered! Powerful factions will seek to claim or destroy it.`);
+        }
+      }
+    }
+
     // Resource-based hooks
     if (world.geography.resources['iron'] < 30) {
       hooks.push('The iron mines are running dry. Adventurers must find new sources or the kingdom will fall.');
@@ -215,13 +295,13 @@ export class ExportFormatter {
 
     // Location-based hooks
     const dungeons = world.locations.filter(l => l.type === 'dungeon' || l.type === 'ruins');
-    if (dungeons.length > 0) {
+    if (dungeons.length > 0 && monsters.length === 0) {
       hooks.push(`Ancient ruins at ${dungeons[0].name} have been disturbed. Something ancient has awakened.`);
     }
 
     // Event-based hooks
     const recentEvents = world.events.slice(-5);
-    const disasters = recentEvents.filter(e => e.type === 'natural' || e.type === 'conflict');
+    const disasters = recentEvents.filter((e: any) => e.type === 'natural' || e.type === 'conflict' || e.type === 'monster_raid');
     if (disasters.length > 0) {
       hooks.push(`After the recent ${disasters[0].title.toLowerCase()}, strange things are happening in the affected areas.`);
     }

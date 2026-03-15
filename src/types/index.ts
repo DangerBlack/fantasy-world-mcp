@@ -13,6 +13,13 @@ export enum EventType {
   TECHNOLOGICAL = 'technological',
   MIGRATION = 'migration',
   CULTURAL = 'cultural',
+  MONSTER_RAID = 'monster_raid',
+  MONSTER_INFESTATION = 'monster_infestation',
+  MONSTER_INVASION = 'monster_invasion',
+  MONSTER_DORMANCY = 'monster_dormancy',
+  CRAFT_CREATION = 'craft_creation',
+  CRAFT_DISCOVERY = 'craft_discovery',
+  CRAFT_LOST = 'craft_lost',
 }
 
 export enum LocationType {
@@ -53,6 +60,42 @@ export enum Resource {
   GEMS = 'gems',
 }
 
+export enum CraftCategory {
+  WEAPON = 'weapon',
+  ARMOR = 'armor',
+  TOOL = 'tool',
+  ARTIFACT = 'artifact',
+  BOOK = 'book',
+  JEWELRY = 'jewelry',
+  STRUCTURE = 'structure',
+  RELIC = 'relic',
+}
+
+export enum CraftRarity {
+  COMMON = 'common',
+  UNCOMMON = 'uncommon',
+  RARE = 'rare',
+  LEGENDARY = 'legendary',
+  MYTHIC = 'mythic',
+}
+
+export interface Craft {
+  id: string;
+  name: string;
+  description: string;
+  category: CraftCategory;
+  rarity: CraftRarity;
+  requiredTechLevel: number;
+  requiredResources: Partial<Record<Resource, number>>;
+  creatorPopulationId: string;
+  creationYear: number;
+  location?: LocationId; // Where it was created/current location
+  isHidden?: boolean; // If true, location unknown (lost heritage)
+  hiddenLocation?: LocationId; // Where it's hidden
+  effects?: string[]; // Special properties/bonuses
+  history: string[]; // Notable events in its history
+}
+
 export interface Change {
   type: 'increase' | 'decrease' | 'transform' | 'create' | 'destroy';
   target: string;
@@ -76,16 +119,57 @@ export interface Event {
   location?: LocationId;
 }
 
+export enum MonsterType {
+  DRAGON = 'dragon',
+  GIANT = 'giant',
+  ORC = 'orc',
+  GOBLIN = 'goblin',
+  UNDEAD = 'undead',
+  BEAST = 'beast',
+  DEMON = 'demon',
+  ABERRATION = 'aberration',
+  FAE = 'fae',
+  CUSTOM = 'custom',
+}
+
+export enum MonsterBehavior {
+  AGGRESSIVE = 'aggressive', // Actively raids settlements
+  TERRITORIAL = 'territorial', // Defends territory, attacks intruders
+  NOMADIC = 'nomadic', // Migrates, occasional raids
+  DORMANT = 'dormant', // Sleeper threat, wakes up occasionally
+  HIDING = 'hiding', // Lurks in dungeons/ruins, low profile
+}
+
+export interface MonsterPopulation extends Population {
+  race: 'monster';
+  monsterType: MonsterType;
+  monsterSubtype?: string; // e.g., "red dragon", "stone giant"
+  dangerLevel: number; // 1-10 threat level
+  behavior: MonsterBehavior;
+  lairLocation?: LocationId; // Where they nest
+  raidFrequency: number; // How often they attack (0-1 scale)
+  isDormant: boolean; // Dormant monsters don't act until awakened
+}
+
 export interface Population {
   id: string;
   name: string;
-  race: string; // e.g., 'human', 'dwarf', 'elf', 'dragonborn', 'orc', etc.
+  race: string; // e.g., 'human', 'dwarf', 'elf', 'dragonborn', 'orc', 'monster'
   size: number;
   culture: string;
   technologyLevel: number; // 0-10 scale
   organization: 'nomadic' | 'tribal' | 'feudal' | 'kingdom' | 'empire';
   beliefs: string[];
   relations: Record<string, 'hostile' | 'neutral' | 'friendly' | 'allied'>;
+  crafts: string[]; // IDs of crafts created/owned by this population
+  // Monster-specific fields (optional)
+  monsterType?: MonsterType;
+  monsterSubtype?: string;
+  dangerLevel?: number;
+  behavior?: MonsterBehavior;
+  lairLocation?: LocationId;
+  raidFrequency?: number;
+  isDormant?: boolean;
 }
 
 export interface GeographyLayer {
@@ -100,6 +184,7 @@ export interface SocietyLayer {
   populations: Population[];
   cultures: string[];
   technologies: string[];
+  crafts: string[]; // IDs of all crafts in the world
   conflicts: {
     parties: string[];
     status: 'ongoing' | 'resolved' | 'potential';
@@ -144,6 +229,7 @@ export interface WorldState {
   society: SocietyLayer;
   locations: Location[];
   events: Event[];
+  crafts: Craft[]; // All crafts in the world
   timeline: Timeline;
   metadata: {
     createdAt: string;
@@ -167,5 +253,7 @@ export interface InitialConditions {
   region: TerrainType;
   climate: GeographyLayer['climate'];
   resources: Partial<Record<Resource, number>>;
-  population: Population | Population[]; // Support single or multiple populations
+  population: Population | Population[]; // Support single or multiple populations (including monsters)
+  enableMonsters?: boolean; // Enable monster spawning
+  monsterCount?: number; // Number of monster populations to spawn (0-3)
 }

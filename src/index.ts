@@ -60,13 +60,13 @@ const TOOLS: Tool[] = [
           description: 'Array of populations (supports multiple races like human, dwarf, elf, dragonborn, orc, etc.). Can also be a single object.',
           items: {
             type: 'object',
-            description: 'Population details',
+            description: 'Population details. For monsters, set race: "monster"',
             properties: {
               name: { type: 'string', description: 'Population name' },
               size: { type: 'number', description: 'Initial population count' },
               race: { 
                 type: 'string', 
-                description: 'Race/species (human, dwarf, elf, dragonborn, orc, halfling, goblin, tiefling, etc.)',
+                description: 'Race/species (human, dwarf, elf, dragonborn, orc, halfling, goblin, tiefling, or "monster" for monsters)',
                 default: 'human'
               },
               culture: { type: 'string', description: 'Cultural identity' },
@@ -75,9 +75,34 @@ const TOOLS: Tool[] = [
                 enum: ['nomadic', 'tribal', 'feudal', 'kingdom', 'empire'],
                 description: 'Social organization level',
               },
+              // Monster-specific (only used if race="monster")
+              monsterType: {
+                type: 'string',
+                enum: ['dragon', 'giant', 'orc', 'goblin', 'undead', 'beast', 'demon', 'aberration', 'fae'],
+                description: 'Monster type (only for monsters)',
+              },
+              dangerLevel: {
+                type: 'number',
+                description: 'Threat level 1-10 (only for monsters)',
+              },
+              behavior: {
+                type: 'string',
+                enum: ['aggressive', 'territorial', 'nomadic', 'dormant', 'hiding'],
+                description: 'Monster behavior pattern (only for monsters)',
+              },
             },
             required: ['name', 'size', 'culture', 'organization'],
           },
+        },
+        enableMonsters: {
+          type: 'boolean',
+          description: 'Enable monster spawning during simulation (default: true)',
+          default: true,
+        },
+        monsterCount: {
+          type: 'number',
+          description: 'Number of monster populations to spawn initially (0-3, default: 1)',
+          default: 1,
         },
       },
       required: ['event', 'locationType', 'region', 'climate', 'population', 'resources'],
@@ -238,6 +263,127 @@ const TOOLS: Tool[] = [
       required: ['worldId'],
     },
   },
+  {
+    name: 'loadWorld',
+    description: 'Load a world from previously saved JSON data. Use this when resuming a world from AI context.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        worldData: {
+          type: 'string',
+          description: 'Full JSON data of the world (copy from previous getWorldState or exportWorld result)',
+        },
+      },
+      required: ['worldData'],
+    },
+  },
+  {
+    name: 'addPopulation',
+    description: 'Add a new population (including monsters) to an existing world. Use this to add orcs, elves, etc. after world creation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        worldId: {
+          type: 'string',
+          description: 'World ID to add population to',
+        },
+        name: {
+          type: 'string',
+          description: 'Name of the population (e.g., "Orc Warband", "Elven Clan")',
+        },
+        size: {
+          type: 'number',
+          description: 'Initial population size (e.g., 50 for a small group, 500 for a tribe)',
+        },
+        race: {
+          type: 'string',
+          description: 'Race: human, dwarf, elf, orc, monster, etc. Use "monster" for monsters',
+        },
+        culture: {
+          type: 'string',
+          description: 'Cultural identity (e.g., "Hill Dwellers", "River Folk")',
+        },
+        organization: {
+          type: 'string',
+          enum: ['nomadic', 'tribal', 'feudal', 'kingdom', 'empire'],
+          description: 'Social organization level',
+        },
+        monsterType: {
+          type: 'string',
+          enum: ['dragon', 'giant', 'orc', 'goblin', 'undead', 'beast', 'demon', 'aberration', 'fae'],
+          description: 'Monster type (only if race="monster")',
+        },
+        dangerLevel: {
+          type: 'number',
+          description: 'Threat level 1-10 (only for monsters, default: 5)',
+        },
+        behavior: {
+          type: 'string',
+          enum: ['aggressive', 'territorial', 'nomadic', 'dormant', 'hiding'],
+          description: 'Monster behavior (only for monsters)',
+        },
+      },
+      required: ['worldId', 'name', 'size', 'race', 'culture', 'organization'],
+    },
+  },
+  {
+    name: 'createCraft',
+    description: 'Create a new craft/item/heritage object. AI should generate creative names and descriptions for magical items, weapons, books, artifacts, etc.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        worldId: {
+          type: 'string',
+          description: 'World ID',
+        },
+        name: {
+          type: 'string',
+          description: 'Name of the craft (e.g., "Sword of Dawn", "Tome of Ancient Secrets", "Dragonhide Barricade")',
+        },
+        description: {
+          type: 'string',
+          description: 'Detailed description of the item and its properties',
+        },
+        category: {
+          type: 'string',
+          enum: ['weapon', 'armor', 'tool', 'artifact', 'book', 'jewelry', 'structure', 'relic'],
+          description: 'Type of craft',
+        },
+        rarity: {
+          type: 'string',
+          enum: ['common', 'uncommon', 'rare', 'legendary', 'mythic'],
+          description: 'Rarity level',
+        },
+        requiredTechLevel: {
+          type: 'number',
+          description: 'Minimum technology level required (0-10)',
+        },
+        requiredResources: {
+          type: 'object',
+          description: 'Resources needed to create (e.g., {iron: 50, magic: 30})',
+          additionalProperties: { type: 'number' },
+        },
+        creatorPopulationId: {
+          type: 'string',
+          description: 'ID of population that created this',
+        },
+        location: {
+          type: 'string',
+          description: 'Current location (optional)',
+        },
+        isHidden: {
+          type: 'boolean',
+          description: 'If true, the item is hidden/lost (location unknown)',
+        },
+        effects: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Special effects or properties (e.g., "+3 damage", "grants night vision")',
+        },
+      },
+      required: ['worldId', 'name', 'description', 'category', 'rarity', 'requiredTechLevel', 'creatorPopulationId'],
+    },
+  },
 ];
 
 // Server instance - persists across tool calls
@@ -390,6 +536,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'loadWorld': {
+        const result = toolHandler.loadWorld(args as any);
+        console.error(`World loaded: ${result.worldId}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                worldId: result.worldId,
+                message: `World loaded successfully. Current year: ${result.world.timestamp}`,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'addPopulation': {
+        const addArgs = args as any;
+        const result = toolHandler.addPopulation(addArgs);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                populationId: result.populationId,
+                message: `Added ${addArgs.race} population: ${addArgs.name} (${addArgs.size} people)`,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'createCraft': {
+        const craftArgs = args as any;
+        const result = toolHandler.createCraft(craftArgs);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                craftId: result.craftId,
+                craft: result.craft,
+                message: `Created ${craftArgs.rarity} ${craftArgs.category}: ${craftArgs.name}`,
+              }, null, 2),
             },
           ],
         };

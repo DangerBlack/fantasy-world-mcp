@@ -4,8 +4,9 @@
 
 import { WorldManager } from '../core/worldManager';
 import { SimulationEngine } from '../simulation/engine';
-import { InitialConditions, SimulationParams } from '../types';
+import { InitialConditions, SimulationParams, Craft, CraftCategory, CraftRarity } from '../types';
 import { ExportFormatter } from '../utils/export';
+import { v4 as uuidv4 } from 'uuid';
 
 export class ToolHandler {
   private worldManager: WorldManager;
@@ -25,9 +26,8 @@ export class ToolHandler {
     region: string;
     climate: string;
     resources?: Record<string, number>;
-    population: any | any[]; // Single population or array
+    population: any | any[];
   }): { worldId: string; world: any } {
-    // Define input population type (simpler, without generated fields)
     interface InputPopulation {
       name: string;
       size: number;
@@ -36,7 +36,6 @@ export class ToolHandler {
       organization: string;
     }
 
-    // Normalize to array format for flexible input
     const populations: InputPopulation[] = Array.isArray(args.population) 
       ? args.population.map((p: any) => ({
           name: p.name,
@@ -63,6 +62,13 @@ export class ToolHandler {
     };
 
     const world = this.worldManager.createWorld(conditions);
+    return { worldId: world.id, world };
+  }
+
+  loadWorld(args: { worldData: string }): { worldId: string; world: any } {
+    // AI passes back previously saved world data
+    const world = JSON.parse(args.worldData);
+    this.worldManager.updateWorld(world.id, world);
     return { worldId: world.id, world };
   }
 
@@ -185,6 +191,127 @@ export class ToolHandler {
   deleteWorld(args: { worldId: string }): { success: boolean } {
     this.worldManager.deleteWorld(args.worldId);
     return { success: true };
+  }
+
+  addPopulation(args: {
+    worldId: string;
+    name: string;
+    size: number;
+    race: string;
+    culture: string;
+    organization: string;
+    monsterType?: string;
+    dangerLevel?: number;
+    behavior?: string;
+  }): { success: boolean; populationId: string } {
+    const population: any = {
+      id: `pop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: args.name,
+      size: args.size,
+      race: args.race,
+      culture: args.culture,
+      technologyLevel: args.race === 'monster' ? 0 : 2,
+      organization: args.organization as any,
+      beliefs: [],
+      relations: {},
+    };
+
+    if (args.race === 'monster') {
+      population.monsterType = args.monsterType as any;
+      population.dangerLevel = args.dangerLevel || 5;
+      population.behavior = args.behavior as any || 'aggressive';
+      population.raidFrequency = 0.3;
+      population.isDormant = args.behavior === 'dormant';
+    }
+
+    const success = this.worldManager.addPopulation(args.worldId, population);
+    if (!success) {
+      throw new Error(`World ${args.worldId} not found`);
+    }
+
+    return { success: true, populationId: population.id };
+  }
+
+  createCraft(args: {
+    worldId: string;
+    name: string;
+    description: string;
+    category: string;
+    rarity: string;
+    requiredTechLevel: number;
+    requiredResources?: Record<string, number>;
+    creatorPopulationId: string;
+    location?: string;
+    isHidden?: boolean;
+    effects?: string[];
+  }): { success: boolean; craftId: string; craft: any } {
+    const world = this.worldManager.getWorld(args.worldId);
+    if (!world) {
+      throw new Error(`World ${args.worldId} not found`);
+    }
+
+    const craft: Craft = {
+      id: `craft_${uuidv4()}`,
+      name: args.name,
+      description: args.description,
+      category: args.category as CraftCategory,
+      rarity: args.rarity as CraftRarity,
+      requiredTechLevel: args.requiredTechLevel,
+      requiredResources: args.requiredResources || {},
+      creatorPopulationId: args.creatorPopulationId,
+      creationYear: world.timestamp,
+      location: args.location,
+      isHidden: args.isHidden || false,
+      hiddenLocation: args.isHidden ? args.location : undefined,
+      effects: args.effects || [],
+      history: [`Created in year ${world.timestamp} by ${args.creatorPopulationId}`],
+    };
+
+    // Add craft to world
+    if (!world.crafts) {
+      world.crafts = [];
+    }
+    world.crafts.push(craft);
+
+    // Add craft ID to society
+    if (!world.society.crafts) {
+      world.society.crafts = [];
+    }
+    world.society.crafts.push(craft.id);
+
+    // Add craft to creator population
+    const creator = world.society.populations.find(p => p.id === args.creatorPopulationId);
+    if (creator) {
+      if (!creator.crafts) {
+        creator.crafts = [];
+      }
+      creator.crafts.push(craft.id);
+    }
+
+    // Create event for craft creation
+    const event = {
+      id: uuidv4(),
+      year: world.timestamp,
+      type: 'craft_creation' as any,
+      title: `Creation of ${args.name}`,
+      description: args.description,
+      causes: [],
+      effects: [],
+      location: args.location,
+      impact: {
+        society: [{
+          type: 'create' as const,
+          target: args.name,
+          description: `${args.category} crafted: ${args.rarity} rarity`,
+        }],
+      },
+    };
+    world.events.push(event);
+    world.timeline.events.push(event);
+
+    this.worldManager.updateWorld(args.worldId, world);
+
+    return { success: true, craftId: craft.id, craft };
   }
 
   private getSnapshotAt(world: any, year: number): any {

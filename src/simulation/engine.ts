@@ -16,6 +16,9 @@ import {
   LocationType,
   Resource,
   Population,
+  MonsterType,
+  MonsterBehavior,
+  MonsterPopulation,
 } from '../types';
 import { WorldManager } from '../core/worldManager';
 
@@ -159,6 +162,13 @@ export class SimulationEngine {
 
     const naturalEvents = this.checkNaturalEvents(world, currentYear, nextYear);
     events.push(...naturalEvents);
+
+    // Monster events (if enabled in world)
+    const worldMeta = world.metadata as any;
+    if (worldMeta.enableMonsters !== false) {
+      const monsterEvents = this.checkMonsterActivity(world, currentYear, nextYear);
+      events.push(...monsterEvents);
+    }
 
     this.linkEventsCausally(world, events);
 
@@ -700,5 +710,165 @@ export class SimulationEngine {
     const root = this.rng.pick(roots);
     
     return `${prefix}${root}`;
+  }
+
+  private checkMonsterActivity(world: WorldState, currentYear: number, nextYear: number): Event[] {
+    const events: Event[] = [];
+    
+    // Get all monster populations
+    const monsters = world.society.populations.filter(p => p.race === 'monster') as MonsterPopulation[];
+    
+    if (monsters.length === 0) return events;
+
+    // Monster growth (faster than civilizations)
+    for (const monster of monsters) {
+      if (monster.isDormant) {
+        // Chance to wake up
+        if (this.rng.boolean(0.05)) {
+          monster.isDormant = false;
+          events.push({
+            id: uuidv4(),
+            year: nextYear,
+            type: EventType.MONSTER_DORMANCY,
+            title: `${monster.monsterSubtype || monster.name} Awakens`,
+            description: `The ${monster.monsterType} ${monster.name} emerges from dormancy`,
+            causes: [],
+            effects: [],
+            location: monster.lairLocation,
+            impact: {
+              society: [{
+                type: 'transform',
+                target: monster.name,
+                description: 'Dormant monster awakens and becomes active',
+              }],
+            },
+          });
+        }
+        continue;
+      }
+
+      // Monster population growth - varies by monster type
+      const baseGrowthRate = this.getMonsterGrowthRate(monster.monsterType);
+      const growthRate = baseGrowthRate + (monster.raidFrequency || 0.3) * 0.02;
+      const change = Math.floor(monster.size * growthRate);
+      if (change > 0) {
+        monster.size += change;
+        events.push({
+          id: uuidv4(),
+          year: nextYear,
+          type: EventType.MONSTER_INFESTATION,
+          title: `${monster.name} Population Grows`,
+          description: `${monster.monsterSubtype || monster.name} breeding increases their numbers by ${change}`,
+          causes: [],
+          effects: [],
+          location: monster.lairLocation,
+          impact: {
+            society: [{
+              type: 'increase',
+              target: monster.name,
+              value: change,
+              description: `Monster threat level: ${monster.dangerLevel}`,
+            }],
+          },
+        });
+      }
+
+      // Raid settlements
+      if (this.rng.boolean(monster.raidFrequency || 0.3)) {
+        const civilizedPops = world.society.populations.filter(p => p.race !== 'monster');
+        if (civilizedPops.length > 0) {
+          const target = this.rng.pick(civilizedPops);
+          
+          // Defense calculation: larger/more organized populations defend better
+          const defenseBonus = Math.min(0.8, (target.size / 1000) * 0.2);
+          const organizationBonus = ({
+            'nomadic': 0.1, 'tribal': 0.2, 'feudal': 0.4, 'kingdom': 0.6, 'empire': 0.8
+          }[target.organization] || 0);
+          const totalDefense = defenseBonus + organizationBonus;
+          
+          // Raid damage reduced by defense
+          const baseDamage = Math.floor(monster.size * (monster.dangerLevel / 10) * 0.5);
+          const raidDamage = Math.max(1, Math.floor(baseDamage * (1 - totalDefense)));
+          target.size = Math.max(0, target.size - raidDamage);
+
+          // Update relations
+          target.relations[monster.id] = 'hostile';
+          monster.relations[target.id] = 'hostile';
+
+          events.push({
+            id: uuidv4(),
+            year: nextYear,
+            type: EventType.MONSTER_RAID,
+            title: `${monster.monsterSubtype || 'Monster'} Raid`,
+            description: `${monster.name} attacks ${target.name}, killing/capturing ${raidDamage} people`,
+            causes: [],
+            effects: [],
+            location: world.locations.find(l => l.inhabitants.includes(target.id))?.id,
+            impact: {
+              society: [
+                {
+                  type: 'decrease',
+                  target: target.name,
+                  value: raidDamage,
+                  description: 'Casualties from monster raid',
+                },
+                {
+                  type: 'transform',
+                  target: 'relations',
+                  description: `${target.name} now hostile to ${monster.name}`,
+                },
+              ],
+            },
+          });
+
+          // Chance to turn location into ruins
+          const targetLocation = world.locations.find(l => l.inhabitants.includes(target.id));
+          if (targetLocation && targetLocation.type === 'city' && this.rng.boolean(0.1)) {
+            targetLocation.type = LocationType.RUINS;
+            targetLocation.features = ['crumbling walls', 'monster lair', 'scorch marks'];
+            targetLocation.dangerLevel = monster.dangerLevel;
+            
+            events.push({
+              id: uuidv4(),
+              year: nextYear,
+              type: EventType.MONSTER_INVASION,
+              title: `${targetLocation.name} Overrun`,
+              description: `${monster.name} has taken over ${targetLocation.name}, turning it into a monster lair`,
+              causes: [],
+              effects: [],
+              location: targetLocation.id,
+              impact: {
+                geography: [{
+                  type: 'transform',
+                  target: targetLocation.name,
+                  description: 'City becomes monster-infested ruins',
+                }],
+              },
+            });
+          }
+        }
+      }
+    }
+
+    return events;
+  }
+
+  private getMonsterGrowthRate(monsterType: MonsterType): number {
+    // Different monster types have vastly different growth rates
+    // Based on realistic breeding cycles and lifespans
+    const growthRates: Record<MonsterType, number> = {
+      [MonsterType.DRAGON]: 0.005,     // Extremely slow - centuries to mature
+      [MonsterType.GIANT]: 0.01,        // Very slow - long lifespans, few offspring
+      [MonsterType.ORC]: 0.035,         // Fast - short lives, large families
+      [MonsterType.GOBLIN]: 0.05,       // Very fast - reproduce rapidly
+      [MonsterType.UNDEAD]: 0.02,       // Medium - depends on source of undead
+      [MonsterType.BEAST]: 0.025,       // Medium - natural animal breeding rates
+      [MonsterType.DEMON]: 0.03,        // Fast - if they can manifest from planes
+      [MonsterType.ABERRATION]: 0.015,  // Slow - mysterious reproduction
+      [MonsterType.FAE]: 0.02,          // Medium - varies greatly by type
+      [MonsterType.CUSTOM]: 0.025,      // Default medium rate
+    };
+    
+    return growthRates[monsterType] || 0.025;
   }
 }

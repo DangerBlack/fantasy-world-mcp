@@ -20,6 +20,8 @@ import {
   Resource,
   Change,
   Timeline,
+  MonsterType,
+  MonsterBehavior,
 } from '../types';
 
 export class WorldManager {
@@ -57,6 +59,7 @@ export class WorldManager {
       organization: pop.organization,
       beliefs: [],
       relations: {},
+      crafts: [],
     }));
 
     // Create initial location(s) - one per population or shared
@@ -125,9 +128,68 @@ export class WorldManager {
         for (let j = i + 1; j < initialPopulations.length; j++) {
           const pop1 = initialPopulations[i];
           const pop2 = initialPopulations[j];
-          pop1.relations[pop2.id] = 'neutral';
-          pop2.relations[pop1.id] = 'neutral';
+          
+          // Monsters are naturally hostile to civilizations
+          if (pop1.race === 'monster') {
+            pop1.relations[pop2.id] = 'hostile';
+            pop2.relations[pop1.id] = 'hostile';
+          } else if (pop2.race === 'monster') {
+            pop1.relations[pop2.id] = 'hostile';
+            pop2.relations[pop1.id] = 'hostile';
+          } else {
+            pop1.relations[pop2.id] = 'neutral';
+            pop2.relations[pop1.id] = 'neutral';
+          }
         }
+      }
+    }
+
+    // Add monster populations if enabled
+    if (conditions.enableMonsters !== false && conditions.monsterCount && conditions.monsterCount > 0) {
+      const monsterLocations = initialLocations.filter(l => l.type === LocationType.CAVE || l.type === LocationType.DUNGEON || l.type === LocationType.RUINS);
+      const lairLocation = monsterLocations.length > 0 ? monsterLocations[0].id : initialLocations[0]?.id;
+
+      for (let i = 0; i < conditions.monsterCount; i++) {
+        const monsterTypes = Object.values(MonsterType).filter(t => t !== MonsterType.CUSTOM);
+        const monsterType = this.rng.pick(monsterTypes);
+        
+        const monsterNames: Record<MonsterType, string> = {
+          [MonsterType.DRAGON]: 'Dragon Horde',
+          [MonsterType.GIANT]: 'Giant Clan',
+          [MonsterType.ORC]: 'Orc Warband',
+          [MonsterType.GOBLIN]: 'Goblin Tribe',
+          [MonsterType.UNDEAD]: 'Undead Legion',
+          [MonsterType.BEAST]: 'Beast Pack',
+          [MonsterType.DEMON]: 'Demon Cult',
+          [MonsterType.ABERRATION]: 'Aberration Swarm',
+          [MonsterType.FAE]: 'Fae Court',
+          [MonsterType.CUSTOM]: 'Monster Clan',
+        };
+
+        const monsterBehaviors = Object.values(MonsterBehavior);
+        const behavior = this.rng.pick(monsterBehaviors);
+
+        const monster: Population = {
+          id: uuidv4(),
+          name: monsterNames[monsterType],
+          race: 'monster',
+          size: 10 + this.rng.nextInt(0, 20),
+          culture: `${monsterType} ${behavior}`,
+          technologyLevel: 0,
+          organization: 'tribal',
+          beliefs: [],
+          relations: {},
+          crafts: [],
+          monsterType,
+          monsterSubtype: `${this.rng.pick(['Ancient', 'Wild', 'Dark', 'Cursed', 'Feral'])} ${monsterType}`,
+          dangerLevel: 3 + this.rng.nextInt(0, 6),
+          behavior,
+          lairLocation,
+          raidFrequency: behavior === MonsterBehavior.AGGRESSIVE ? 0.6 : behavior === MonsterBehavior.TERRITORIAL ? 0.4 : 0.2,
+          isDormant: behavior === MonsterBehavior.DORMANT,
+        };
+
+        initialPopulations.push(monster);
       }
     }
 
@@ -140,24 +202,27 @@ export class WorldManager {
         populations: initialPopulations,
         cultures: [...new Set(initialPopulations.map(p => p.culture))],
         technologies: [],
+        crafts: [],
         conflicts: [],
         tradeRoutes: [],
       },
       locations: initialLocations,
       events: initialEvents,
+      crafts: [],
       timeline: {
         events: initialEvents,
         eras: [{
           name: 'Age of Beginning',
           startYear: 0,
           endYear: 0,
-          summary: `The arrival of ${initialPopulations.map(p => p.race).join(' and ')}`,
+          summary: `The arrival of ${initialPopulations.map(p => p.race === 'monster' ? `${p.monsterSubtype} ${p.name}` : p.race).join(' and ')}`,
         }],
       },
       metadata: {
         createdAt: new Date().toISOString(),
         simulationSteps: 0,
         lastUpdate: new Date().toISOString(),
+        ...(conditions.enableMonsters !== false ? { enableMonsters: true } : {}),
       },
     };
 
@@ -179,6 +244,30 @@ export class WorldManager {
 
   listWorlds(): string[] {
     return Array.from(this.worlds.keys());
+  }
+
+  addPopulation(worldId: string, population: Population): boolean {
+    const world = this.getWorld(worldId);
+    if (!world) return false;
+
+    world.society.populations.push(population);
+    
+    // Set up relations with existing populations
+    for (const existingPop of world.society.populations) {
+      if (existingPop.id === population.id) continue;
+      
+      // Monsters are hostile to civilizations
+      if (population.race === 'monster' || existingPop.race === 'monster') {
+        population.relations[existingPop.id] = 'hostile';
+        existingPop.relations[population.id] = 'hostile';
+      } else {
+        population.relations[existingPop.id] = 'neutral';
+        existingPop.relations[population.id] = 'neutral';
+      }
+    }
+    
+    this.updateWorld(worldId, world);
+    return true;
   }
 
   private initializeResources(custom: Partial<Record<Resource, number>>): Record<Resource, number> {
