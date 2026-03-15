@@ -71,6 +71,7 @@ export interface Event {
 export interface Population {
     id: string;
     name: string;
+    race: string;
     size: number;
     culture: string;
     technologyLevel: number;
@@ -151,11 +152,6 @@ export interface InitialConditions {
     region: TerrainType;
     climate: GeographyLayer['climate'];
     resources: Partial<Record<Resource, number>>;
-    population: {
-        name: string;
-        size: number;
-        culture: string;
-        organization: Population['organization'];
-    };
+    population: Population | Population[];
 }
 //# sourceMappingURL=index.d.ts.map

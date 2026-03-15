@@ -14,18 +14,29 @@ export class ToolHandler {
         this.exportFormatter = new ExportFormatter();
     }
     initializeWorld(args) {
+        // Normalize to array format for flexible input
+        const populations = Array.isArray(args.population)
+            ? args.population.map((p) => ({
+                name: p.name,
+                size: p.size,
+                race: p.race || 'human',
+                culture: p.culture,
+                organization: p.organization,
+            }))
+            : [{
+                    name: args.population.name,
+                    size: args.population.size,
+                    race: args.population.race || 'human',
+                    culture: args.population.culture,
+                    organization: args.population.organization,
+                }];
         const conditions = {
             event: args.event,
             locationType: args.locationType,
             region: args.region,
             climate: args.climate,
             resources: args.resources || {},
-            population: {
-                name: args.population.name,
-                size: args.population.size,
-                culture: args.population.culture,
-                organization: args.population.organization,
-            },
+            population: populations.length === 1 ? populations[0] : populations,
         };
         const world = this.worldManager.createWorld(conditions);
         return { worldId: world.id, world };

@@ -79,6 +79,7 @@ export interface Event {
 export interface Population {
   id: string;
   name: string;
+  race: string; // e.g., 'human', 'dwarf', 'elf', 'dragonborn', 'orc', etc.
   size: number;
   culture: string;
   technologyLevel: number; // 0-10 scale
@@ -166,10 +167,5 @@ export interface InitialConditions {
   region: TerrainType;
   climate: GeographyLayer['climate'];
   resources: Partial<Record<Resource, number>>;
-  population: {
-    name: string;
-    size: number;
-    culture: string;
-    organization: Population['organization'];
-  };
+  population: Population | Population[]; // Support single or multiple populations
 }

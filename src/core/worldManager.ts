@@ -42,48 +42,94 @@ export class WorldManager {
       modifications: [],
     };
 
-    const initialPopulation: Population = {
+    // Support single population or array of populations
+    const populationsArray = Array.isArray(conditions.population) 
+      ? conditions.population 
+      : [conditions.population];
+
+    const initialPopulations: Population[] = populationsArray.map((pop, index) => ({
       id: uuidv4(),
-      name: conditions.population.name,
-      size: conditions.population.size,
-      culture: conditions.population.culture,
+      name: pop.name,
+      race: pop.race || 'human',
+      size: pop.size,
+      culture: pop.culture,
       technologyLevel: 1,
-      organization: conditions.population.organization,
+      organization: pop.organization,
       beliefs: [],
       relations: {},
-    };
+    }));
 
-    const initialLocation: Location = {
-      id: uuidv4(),
-      type: conditions.locationType,
-      name: this.generateLocationName(conditions.locationType, conditions.region),
-      description: conditions.event,
-      geography: {},
-      inhabitants: [initialPopulation.id],
-      history: [],
-      features: [],
-      connections: [],
-      dangerLevel: 0,
-      complexity: 1,
-    };
+    // Create initial location(s) - one per population or shared
+    const initialLocations: Location[] = [];
+    
+    if (populationsArray.length === 1) {
+      // Single population - shared location
+      const initialLocation: Location = {
+        id: uuidv4(),
+        type: conditions.locationType,
+        name: this.generateLocationName(conditions.locationType, conditions.region),
+        description: conditions.event,
+        geography: {},
+        inhabitants: [initialPopulations[0].id],
+        history: [],
+        features: [],
+        connections: [],
+        dangerLevel: 0,
+        complexity: 1,
+      };
+      initialLocations.push(initialLocation);
+    } else {
+      // Multiple populations - each gets their own starting location near the main event
+      populationsArray.forEach((pop, index) => {
+        const location: Location = {
+          id: uuidv4(),
+          type: index === 0 ? conditions.locationType : conditions.locationType,
+          name: this.generateLocationName(conditions.locationType, conditions.region, pop.race),
+          description: `${pop.name} settle near ${conditions.event}`,
+          geography: {},
+          inhabitants: [initialPopulations[index].id],
+          history: [],
+          features: [],
+          connections: initialLocations.map(l => l.id),
+          dangerLevel: 0,
+          complexity: 1,
+        };
+        initialLocations.push(location);
+      });
+    }
 
-    const initialState: Event = {
-      id: uuidv4(),
-      year: 0,
-      type: EventType.NATURAL,
-      title: 'Beginning',
-      description: conditions.event,
-      causes: [],
-      effects: [],
-      location: initialLocation.id,
-      impact: {
-        society: [{
-          type: 'create',
-          target: conditions.population.name,
-          description: `${conditions.population.size} ${conditions.population.culture} people arrive`,
-        }],
+    // Create initial events for each population
+    const initialEvents: Event[] = [
+      {
+        id: uuidv4(),
+        year: 0,
+        type: EventType.NATURAL,
+        title: 'Beginning',
+        description: conditions.event,
+        causes: [],
+        effects: initialPopulations.map((_, i) => initialLocations[i]?.id).filter(Boolean) as string[],
+        location: initialLocations[0]?.id,
+        impact: {
+          society: [{
+            type: 'create',
+            target: initialPopulations.map(p => `${p.race} ${p.name}`).join(', '),
+            description: `${initialPopulations.map(p => `${p.size} ${p.race} ${p.name}`).join(', ')} arrive`,
+          }],
+        },
       },
-    };
+    ];
+
+    // Set up inter-population relations
+    if (initialPopulations.length > 1) {
+      for (let i = 0; i < initialPopulations.length; i++) {
+        for (let j = i + 1; j < initialPopulations.length; j++) {
+          const pop1 = initialPopulations[i];
+          const pop2 = initialPopulations[j];
+          pop1.relations[pop2.id] = 'neutral';
+          pop2.relations[pop1.id] = 'neutral';
+        }
+      }
+    }
 
     const world: WorldState = {
       id: worldId,
@@ -91,21 +137,21 @@ export class WorldManager {
       timestamp: 0,
       geography: initialGeography,
       society: {
-        populations: [initialPopulation],
-        cultures: [conditions.population.culture],
+        populations: initialPopulations,
+        cultures: [...new Set(initialPopulations.map(p => p.culture))],
         technologies: [],
         conflicts: [],
         tradeRoutes: [],
       },
-      locations: [initialLocation],
-      events: [initialState],
+      locations: initialLocations,
+      events: initialEvents,
       timeline: {
-        events: [initialState],
+        events: initialEvents,
         eras: [{
           name: 'Age of Beginning',
           startYear: 0,
           endYear: 0,
-          summary: 'The initial event that started it all',
+          summary: `The arrival of ${initialPopulations.map(p => p.race).join(' and ')}`,
         }],
       },
       metadata: {
@@ -210,8 +256,18 @@ export class WorldManager {
     return features;
   }
 
-  private generateLocationName(type: LocationType, terrain: TerrainType): string {
-    const prefixes = ['Dark', 'Iron', 'Stone', 'Green', 'High', 'Deep', 'Old', 'New', 'Hidden', 'Lost'];
+  private generateLocationName(type: LocationType, terrain: TerrainType, race?: string): string {
+    const prefixes = race 
+      ? {
+          'dwarf': ['Deep', 'Stone', 'Iron', 'Mountain'],
+          'elf': ['Green', 'Star', 'Moon', 'Forest'],
+          'dragonborn': ['Fire', 'Scale', 'Ash', 'Dragon'],
+          'orc': ['Red', 'Blood', 'War', 'Iron'],
+          'human': ['New', 'High', 'Old', 'Free'],
+          'halfling': ['Hill', 'Green', 'Cozy', 'Shire'],
+        }[race.toLowerCase()] || ['New', 'High', 'Old']
+      : ['Dark', 'Iron', 'Stone', 'Green', 'High', 'Deep', 'Old', 'New', 'Hidden', 'Lost'];
+    
     const roots: Record<LocationType, string[]> = {
       [LocationType.CAVE]: ['Cavern', 'Hollow', 'Den', 'Grotto', 'Chamber'],
       [LocationType.SETTLEMENT]: ['Haven', 'Rest', 'Outpost', 'Camp'],
@@ -228,6 +284,9 @@ export class WorldManager {
     const prefix = this.rng.pick(prefixes);
     const root = this.rng.pick(roots[type]);
     
+    if (race) {
+      return `${prefix} ${root} (${race})`;
+    }
     return `${prefix} ${root}`;
   }
 }

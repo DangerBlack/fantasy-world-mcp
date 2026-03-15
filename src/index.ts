@@ -56,19 +56,28 @@ const TOOLS: Tool[] = [
           },
         },
         population: {
-          type: 'object',
-          description: 'Starting population details',
-          properties: {
-            name: { type: 'string', description: 'Population name' },
-            size: { type: 'number', description: 'Initial population count' },
-            culture: { type: 'string', description: 'Cultural identity' },
-            organization: {
-              type: 'string',
-              enum: ['nomadic', 'tribal', 'feudal', 'kingdom', 'empire'],
-              description: 'Social organization level',
+          type: 'array',
+          description: 'Array of populations (supports multiple races like human, dwarf, elf, dragonborn, orc, etc.). Can also be a single object.',
+          items: {
+            type: 'object',
+            description: 'Population details',
+            properties: {
+              name: { type: 'string', description: 'Population name' },
+              size: { type: 'number', description: 'Initial population count' },
+              race: { 
+                type: 'string', 
+                description: 'Race/species (human, dwarf, elf, dragonborn, orc, halfling, goblin, tiefling, etc.)',
+                default: 'human'
+              },
+              culture: { type: 'string', description: 'Cultural identity' },
+              organization: {
+                type: 'string',
+                enum: ['nomadic', 'tribal', 'feudal', 'kingdom', 'empire'],
+                description: 'Social organization level',
+              },
             },
+            required: ['name', 'size', 'culture', 'organization'],
           },
-          required: ['name', 'size', 'culture', 'organization'],
         },
       },
       required: ['event', 'locationType', 'region', 'climate', 'population', 'resources'],

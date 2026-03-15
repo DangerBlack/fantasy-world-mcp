@@ -25,25 +25,41 @@ export class ToolHandler {
     region: string;
     climate: string;
     resources?: Record<string, number>;
-    population: {
+    population: any | any[]; // Single population or array
+  }): { worldId: string; world: any } {
+    // Define input population type (simpler, without generated fields)
+    interface InputPopulation {
       name: string;
       size: number;
+      race?: string;
       culture: string;
       organization: string;
-    };
-  }): { worldId: string; world: any } {
+    }
+
+    // Normalize to array format for flexible input
+    const populations: InputPopulation[] = Array.isArray(args.population) 
+      ? args.population.map((p: any) => ({
+          name: p.name,
+          size: p.size,
+          race: p.race || 'human',
+          culture: p.culture,
+          organization: p.organization,
+        }))
+      : [{
+          name: args.population.name,
+          size: args.population.size,
+          race: args.population.race || 'human',
+          culture: args.population.culture,
+          organization: args.population.organization,
+        }];
+
     const conditions: InitialConditions = {
       event: args.event,
       locationType: args.locationType as any,
       region: args.region as any,
       climate: args.climate as any,
       resources: args.resources || {},
-      population: {
-        name: args.population.name,
-        size: args.population.size,
-        culture: args.population.culture,
-        organization: args.population.organization as any,
-      },
+      population: populations.length === 1 ? populations[0] as any : populations as any,
     };
 
     const world = this.worldManager.createWorld(conditions);

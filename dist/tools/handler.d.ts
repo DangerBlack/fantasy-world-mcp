@@ -13,12 +13,7 @@ export declare class ToolHandler {
         region: string;
         climate: string;
         resources?: Record<string, number>;
-        population: {
-            name: string;
-            size: number;
-            culture: string;
-            organization: string;
-        };
+        population: any | any[];
     }): {
         worldId: string;
         world: any;
