@@ -1047,47 +1047,51 @@ export class SimulationEngine {
       // Check for CRITICAL food shortage (famine) - highest priority
       const foodAvailability = world.geography.resources[Resource.FOOD];
       if (foodAvailability <= 0 && this.rng.boolean(0.25)) {
-        const quest: Quest = this.generateContextualQuest(world, population, 'famine', nextYear);
-        world.quests.push(quest);
-        world.society.quests.push(quest.id);
-        
-        events.push({
-          id: uuidv4(),
-          year: nextYear,
-          type: EventType.QUEST_GENERATED,
-          title: quest.title,
-          description: quest.description,
-          causes: [],
-          effects: [],
-          impact: {
-            resources: [{
-              type: 'decrease',
-              target: 'food',
-              description: 'Famine threatens extinction',
-            }],
-          },
-        });
+        const quest = this.generateContextualQuest(world, population, 'famine', nextYear);
+        if (quest) {
+          world.quests.push(quest);
+          world.society.quests.push(quest.id);
+          
+          events.push({
+            id: uuidv4(),
+            year: nextYear,
+            type: EventType.QUEST_GENERATED,
+            title: quest.title,
+            description: quest.description,
+            causes: [],
+            effects: [],
+            impact: {
+              resources: [{
+                type: 'decrease',
+                target: 'food',
+                description: 'Famine threatens extinction',
+              }],
+            },
+          });
+        }
       } else if (foodAvailability < 10 && this.rng.boolean(0.15)) {
-        const quest: Quest = this.generateContextualQuest(world, population, 'famine', nextYear);
-        world.quests.push(quest);
-        world.society.quests.push(quest.id);
-        
-        events.push({
-          id: uuidv4(),
-          year: nextYear,
-          type: EventType.QUEST_GENERATED,
-          title: quest.title,
-          description: quest.description,
-          causes: [],
-          effects: [],
-          impact: {
-            resources: [{
-              type: 'decrease',
-              target: 'food',
-              description: 'Severe food shortage',
-            }],
-          },
-        });
+        const quest = this.generateContextualQuest(world, population, 'famine', nextYear);
+        if (quest) {
+          world.quests.push(quest);
+          world.society.quests.push(quest.id);
+          
+          events.push({
+            id: uuidv4(),
+            year: nextYear,
+            type: EventType.QUEST_GENERATED,
+            title: quest.title,
+            description: quest.description,
+            causes: [],
+            effects: [],
+            impact: {
+              resources: [{
+                type: 'decrease',
+                target: 'food',
+                description: 'Severe food shortage',
+              }],
+            },
+          });
+        }
       }
 
       // AI-powered contextual quest generation for other problems
@@ -1237,7 +1241,7 @@ export class SimulationEngine {
     population: Population, 
     context: string,
     year: number
-  ): Quest {
+  ): Quest | null {
     // Simulate AI-generated quest based on world context
     // This creates unique quests by combining world state elements
     
@@ -1287,7 +1291,7 @@ export class SimulationEngine {
     };
 
     // Quest templates based on context
-    const questTemplates: Record<string, (data: typeof contextData, year: number) => Quest> = {
+    const questTemplates: Record<string, (data: typeof contextData, year: number) => Quest | null> = {
       'famine': (data, year) => this.createFamineQuestFromContext(data, year),
       'adaptive': (data, year) => this.createAdaptiveQuest(data, year),
       'monster': (data, year) => this.createMonsterQuestFromContext(data, year),
@@ -1303,7 +1307,7 @@ export class SimulationEngine {
     return template(contextData, year);
   }
 
-  private createFamineQuestFromContext(data: any, year: number): Quest {
+  private createFamineQuestFromContext(data: any, year: number): Quest | null {
     // Generate famine quest using actual world context
     const terrainFeatures: Record<string, string> = {
       mountains: 'mountain caves and high-altitude herbs',
@@ -1338,7 +1342,7 @@ export class SimulationEngine {
     };
   }
 
-  private createAdaptiveQuest(data: any, year: number): Quest {
+  private createAdaptiveQuest(data: any, year: number): Quest | null {
     // Generate quest based on multiple world factors - truly "AI-like"
     
     // Check for specific problems and generate appropriate quests
@@ -1403,46 +1407,12 @@ export class SimulationEngine {
       };
     }
 
-    // Default: mysterious quest based on terrain/climate
-    const mysteryTypes = [
-      {
-        title: 'Investigate Strange Phenomena',
-        desc: `Unusual ${data.climate} phenomena are appearing in the ${data.terrain}. ${data.population} fears it portends disaster. Heroes must investigate.`,
-        type: QuestType.MYSTERY,
-      },
-      {
-        title: 'Discover Ancient Secrets',
-        desc: `Ruins have been discovered in the ${data.terrain}. ${data.population} believes they contain knowledge that could save them. Heroes must explore.`,
-        type: QuestType.ARTIFACT_RETRIEVAL,
-      },
-      {
-        title: 'Protect the Settlement',
-        desc: `Strange signs suggest danger approaching ${data.population}'s ${data.terrain} home. Heroes must establish defenses and investigate.`,
-        type: QuestType.PROTECTION,
-      },
-    ];
-
-    const questType = this.rng.pick(mysteryTypes);
-    
-    return {
-      id: `quest_${uuidv4()}`,
-      title: questType.title,
-      description: questType.desc,
-      type: questType.type as QuestType,
-      status: QuestStatus.OPEN,
-      urgency: 'medium',
-      originPopulationId: data.population,
-      reward: `${data.population} will honor heroes as protectors and saviors`,
-      requiredHeroes: 2,
-      assignedHeroes: [],
-      deadline: year + 30,
-      failureConsequences: `Disaster strikes ${data.population}. Their ${data.terrain} settlement suffers greatly.`,
-      successConsequences: `${data.population} is saved. New knowledge or protection gained.`,
-      createdAt: year,
-    };
+    // No real problems detected - don't generate a mystery quest without a cause
+    // This prevents "orphan quests" with no actual threat
+    return null as any; // Will be handled by caller
   }
 
-  private createMonsterQuestFromContext(data: any, year: number): Quest {
+  private createMonsterQuestFromContext(data: any, year: number): Quest | null {
     // Fallback for monster quests
     return this.createMonsterHuntQuest({ society: { populations: [{ id: data.population, ...data }] } as any, locations: [] } as any, 
       { id: data.population, name: data.population, size: data.size, culture: data.culture, technologyLevel: data.technologyLevel, organization: data.organization, beliefs: [], relations: [], crafts: [] } as any,
@@ -1450,7 +1420,7 @@ export class SimulationEngine {
       year);
   }
 
-  private createResourceQuestFromContext(data: any, year: number): Quest {
+  private createResourceQuestFromContext(data: any, year: number): Quest | null {
     // Fallback for resource quests
     return this.createResourceRecoveryQuest({ geography: { resources: { iron: data.resources.iron } } } as any,
       { id: data.population, name: data.population, size: data.size, culture: data.culture, technologyLevel: data.technologyLevel, organization: data.organization, beliefs: [], relations: [], crafts: [] } as any,
