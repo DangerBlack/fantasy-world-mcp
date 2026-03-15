@@ -547,6 +547,48 @@ export class SimulationEngine {
     const age = nextYear;
 
     for (const location of world.locations) {
+      // Check for abandoned locations (no inhabitants)
+      if (location.inhabitants.length === 0 && location.type !== LocationType.RUINS) {
+        // Location is abandoned - start decay process
+        if (location.history.length > 0) {
+          // Assume abandoned 20-50 years ago if no recent events
+          const yearsSinceAbandonment = 20 + this.rng.nextInt(0, 30);
+          
+          if (yearsSinceAbandonment > 50 && this.rng.boolean(0.3)) {
+            location.type = LocationType.RUINS;
+            location.features = ['crumbling structures', 'overgrown paths', 'collapsed roofs'];
+            location.description = `The abandoned ruins of ${location.name}, reclaimed by nature`;
+            location.dangerLevel = Math.max(1, Math.floor(location.dangerLevel / 2));
+
+            events.push({
+              id: uuidv4(),
+              year: nextYear,
+              type: EventType.SOCIAL,
+              title: `${location.name} Abandoned`,
+              description: `Without inhabitants, ${location.name} falls into disrepair and becomes ruins`,
+              causes: [],
+              effects: [],
+              location: location.id,
+              impact: {
+                geography: [{
+                  type: 'transform',
+                  target: location.name,
+                  description: 'Settlement abandoned, decaying into ruins',
+                }],
+              },
+            });
+          }
+        }
+        continue;
+      }
+
+      // Normal location evolution (existing code)
+      const population = world.society.populations.find(p => 
+        location.inhabitants.includes(p.id)
+      );
+      
+      if (!population) continue;
+
       if (location.type === LocationType.CAVE && age > 50) {
         const population = world.society.populations.find(p => 
           location.inhabitants.includes(p.id)
