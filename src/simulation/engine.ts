@@ -1507,10 +1507,10 @@ export class SimulationEngine {
       if (population.race === 'monster') continue;
 
       // Chance for craft creation based on technology level and resources
-      const techBonus = population.technologyLevel * 0.02; // 2% per tech level
+      const techBonus = population.technologyLevel * 0.03; // 3% per tech level
       const magicResource = world.geography.resources[Resource.MAGIC] || 0;
-      const magicBonus = magicResource > 50 ? 0.15 : magicResource > 30 ? 0.1 : magicResource > 10 ? 0.05 : 0;
-      const craftChance = 0.03 + techBonus + magicBonus; // Base 3% + tech + magic
+      const magicBonus = magicResource > 50 ? 0.20 : magicResource > 30 ? 0.15 : magicResource > 10 ? 0.08 : 0.02;
+      const craftChance = 0.05 + techBonus + magicBonus; // Base 5% + tech + magic (minimum 7%)
 
       if (this.rng.boolean(craftChance)) {
         const craft = this.generateCraft(world, population, nextYear);
