@@ -8,8 +8,13 @@ A Model Context Protocol (MCP) server for procedural fantasy world evolution sim
 - **Anthropological Simulation**: Population growth, technology progression, social organization evolution
 - **Geographical Changes**: Resource dynamics, natural events, terrain modifications
 - **Location Evolution**: Cave → Settlement → Village → City → Ruins progression
+- **Monster System**: Dragons, giants, orcs, goblins, undead with raid mechanics, counter-attacks, extinction
+- **Quest Generation**: Auto-generated quests for monster hunts, famine, disease, resource shortages
+- **Craft/Heritage System**: Magical items, weapons, artifacts with rarities and hidden/lost heritage
+- **Religion & Belief System**: Pantheons, monotheism, animism, cults with faith-based defense, religious quests, holy items
 - **Causal Event Tracking**: Every event links back to its causes
 - **Multiple Export Formats**: JSON, Markdown, narrative, GM notes with adventure hooks
+- **World Persistence**: Load/restore worlds from saved JSON data (`loadWorld` tool)
 
 ## Installation
 
@@ -276,6 +281,33 @@ Arguments:
 - "The legendary Sword of Dawn is lost. Ancient texts hint it may be hidden in an ancient battlefield."
 - Players can discover these during adventures
 
+### 8b. Religion & Belief System
+
+The simulation includes a complete religion/belief system that affects gameplay:
+
+**Belief Types:**
+- **Pantheon**: Multiple gods with different domains (war, nature, healing, etc.)
+- **Monotheism**: Single deity worship
+- **Animism**: Nature spirits and ancestor veneration
+- **Philosophy**: Secular moral codes
+- **Cult**: Worship of powerful beings (often evil/chaotic)
+- **Folk**: Local traditions and customs
+
+**Faith Mechanics:**
+- **Defense Bonus**: Populations with organized religion get +0.15 defense (war domain), holy sites give +0.10
+- **Religious Quests**: Pilgrimages, temple restoration, heresy suppression, relic recovery
+- **Holy Items**: Blessed weapons, sacred relics, religious artifacts (higher rarity)
+- **Religious Conflicts**: Populations with incompatible beliefs can become hostile
+- **Temple Locations**: Special locations with divine protection and healing properties
+
+**Example:**
+```
+Population: "The Dwarven Clan"
+Belief: "The Stone Father" (Monotheism, domains: fortress, war)
+Defense Bonus: +0.15 (organized religion with war domain)
+Holy Site: "Mountain Temple" (+0.10 defense when defending this location)
+```
+
 ### 9. Quest System
 
 The simulation automatically generates **serious quests** when populations face problems they cannot solve:
@@ -284,6 +316,7 @@ The simulation automatically generates **serious quests** when populations face 
 - **Monster Hunts**: When monster threat > population defense
 - **Disease Cures**: Plagues sweeping through large kingdoms/empires
 - **Resource Recovery**: Critical shortages (iron, magic, etc.)
+- **Religious Quests**: Pilgrimages, temple restoration, heresy suppression, relic recovery
 
 **Quest Properties:**
 - **Urgency**: low, medium, high, critical
@@ -315,6 +348,36 @@ Arguments:
 ```
 
 Quests appear in GM Notes exports and are prioritized by urgency. Critical quests are highlighted for immediate player attention.
+
+### 10. Load/Restore Worlds
+
+MCP servers are **in-memory only**. When the server restarts, worlds are lost. Use `loadWorld` to restore previously saved worlds:
+
+**Step 1:** Save world data after creation/simulation:
+```javascript
+// After getWorldState or exportWorld, the AI should store the full world JSON
+const worldData = JSON.stringify(world);
+// AI stores this in its conversation context
+```
+
+**Step 2:** After restart, load the world:
+```
+Tool: loadWorld
+Arguments: {
+  "worldData": "{\"id\":\"abc-123\",\"timestamp\":400,\"society\":{...},...}"
+}
+```
+
+**Step 3:** Continue simulation:
+```
+Tool: simulate
+Arguments: {
+  "worldId": "abc-123",
+  "timespan": 100
+}
+```
+
+The AI automatically handles this - just say "resume my world" or "continue the simulation" and it will use `loadWorld()` with the saved data.
 
 ## Example Workflow
 
@@ -710,7 +773,27 @@ npm run test
 
 # Start server directly
 npm start
+
+# Task Management
+npm tasks                                    # List all development tasks
+node scripts/transition.cjs <id> in_progress # Mark task as in progress
+node scripts/complete.cjs <id> "message"     # Complete task and commit
 ```
+
+### Task System
+
+This project uses a task-based workflow for development:
+
+- **Location**: `tasks/` directory (ignored by git)
+- **Format**: Individual `.task.json` files for each task
+- **States**: `pending`, `in_progress`, `completed`
+- **Workflow**: 
+  1. Create task file
+  2. `npm run task:transition <id> in_progress`
+  3. Implement, test, commit
+  4. `npm run task:complete <id> "commit message"`
+
+See `tasks/README.md` for full documentation.
 
 ## License
 
