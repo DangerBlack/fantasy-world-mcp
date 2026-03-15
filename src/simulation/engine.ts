@@ -189,25 +189,48 @@ export class SimulationEngine {
       const foodAvailability = world.geography.resources[Resource.FOOD];
       const waterAvailability = world.geography.resources[Resource.WATER];
       
-      let growthRate = 0.02;
-      growthRate += (foodAvailability / 100) * 0.03;
-      growthRate += (waterAvailability / 100) * 0.02;
-      growthRate -= (population.technologyLevel > 5) ? 0.01 : 0;
+      // Base growth rate reduced significantly
+      let growthRate = 0.005;
+      
+      // Food impact: CRITICAL - no food means population decline
+      if (foodAvailability <= 0) {
+        // Starvation: population decreases by 5-10% per step
+        growthRate = -0.05 - (this.rng.next() * 0.05);
+      } else if (foodAvailability < 20) {
+        // Severe food shortage: slow decline
+        growthRate = -0.02 + (foodAvailability / 100) * 0.01;
+      } else {
+        // Normal food: small positive growth based on availability
+        growthRate += (foodAvailability / 100) * 0.02;
+      }
+      
+      // Water impact
+      if (waterAvailability <= 0) {
+        growthRate -= 0.03; // Death by dehydration
+      } else {
+        growthRate += (waterAvailability / 100) * 0.01;
+      }
+      
+      // Technology reduces growth slightly (lower birth rates in advanced societies)
+      growthRate -= (population.technologyLevel > 5) ? 0.005 : 0;
       
       const change = Math.floor(population.size * growthRate);
       
       if (Math.abs(change) > 0) {
-        population.size += change;
+        population.size = Math.max(0, population.size + change);
         
         const eventType = change > 0 ? EventType.SOCIAL : EventType.CONFLICT;
         const title = change > 0 ? 'Population Growth' : 'Population Decline';
+        const description = change > 0 
+          ? `${population.name} population grew by ${Math.abs(change)} people`
+          : `${population.name} population declined by ${Math.abs(change)} people${foodAvailability <= 0 ? ' due to starvation' : ''}`;
         
         events.push({
           id: uuidv4(),
           year: nextYear,
           type: eventType,
           title,
-          description: `${population.name} population ${change > 0 ? 'grew' : 'shrank'} by ${Math.abs(change)} people`,
+          description,
           causes: [],
           effects: [],
           impact: {
@@ -292,15 +315,32 @@ export class SimulationEngine {
       }
     }
 
-    const regenRate = 0.05;
-    for (const resource of Object.values(Resource)) {
-      if (resource === Resource.FOOD || resource === Resource.WATER) continue;
-      
-      const current = world.geography.resources[resource];
-      if (current < 100) {
-        world.geography.resources[resource] = Math.min(100, current + regenRate);
-      }
+    // Food and water regeneration based on technology and environment
+    // Agriculture technology enables food production
+    const agricultureTech = world.society.technologies.includes('Agriculture');
+    
+    // Food regeneration: base + agriculture bonus + technology bonus
+    let foodRegen = 0.1; // Base natural regeneration
+    if (agricultureTech) {
+      foodRegen += 0.3; // Agriculture provides steady food production
     }
+    
+    // Check if any population has irrigation technology
+    const hasIrrigation = world.society.populations.some(p => p.technologyLevel >= 6);
+    if (hasIrrigation) {
+      foodRegen += 0.2; // Irrigation improves yields
+    }
+    
+    // Water availability affects food production
+    const waterFactor = world.geography.resources[Resource.WATER] / 100;
+    foodRegen *= waterFactor;
+    
+    world.geography.resources[Resource.FOOD] = Math.min(100, 
+      world.geography.resources[Resource.FOOD] + foodRegen);
+    
+    // Water regenerates slowly (rainfall, springs)
+    world.geography.resources[Resource.WATER] = Math.min(100,
+      world.geography.resources[Resource.WATER] + 0.05);
 
     if (world.geography.resources[Resource.FOOD] < 10) {
       events.push({
@@ -421,15 +461,21 @@ export class SimulationEngine {
       const foodStress = world.geography.resources[Resource.FOOD] < 20;
       const overpopulation = population.size > 800;
 
-      if (foodStress || overpopulation) {
+      if ((foodStress || overpopulation) && population.size > 50) {
         if (this.rng.boolean(0.3)) {
+          // Migrate 10-30% of population
+          const migrationSize = Math.floor(population.size * (0.1 + this.rng.next() * 0.2));
+          const remainingSize = population.size - migrationSize;
+          
+          population.size = remainingSize;
+          
           const newLocation: Location = {
             id: uuidv4(),
             type: LocationType.SETTLEMENT,
             name: this.generateNewLocationName(world),
             description: 'A new settlement established by migrating group',
             geography: {},
-            inhabitants: [],
+            inhabitants: [population.id], // Same population ID (now split)
             history: [],
             features: ['temporary shelters', 'trail markers'],
             connections: [world.locations[0]?.id].filter(Boolean) as string[],
@@ -437,6 +483,15 @@ export class SimulationEngine {
             complexity: 1,
           };
 
+          // Create new population for migrants
+          const migrantPopulation: any = {
+            ...population,
+            id: `pop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            name: `${population.name} Colonists`,
+            size: migrationSize,
+          };
+          
+          world.society.populations.push(migrantPopulation);
           world.locations.push(newLocation);
 
           events.push({
@@ -444,16 +499,24 @@ export class SimulationEngine {
             year: nextYear,
             type: EventType.MIGRATION,
             title: 'Migration',
-            description: `${population.name} establishes new settlement: ${newLocation.name}`,
+            description: `${migrationSize} people from ${population.name} establish new settlement: ${newLocation.name}`,
             causes: [],
             effects: [],
             location: newLocation.id,
             impact: {
-              society: [{
-                type: 'create',
-                target: newLocation.name,
-                description: 'New settlement founded',
-              }],
+              society: [
+                {
+                  type: 'decrease',
+                  target: population.name,
+                  value: migrationSize,
+                  description: 'Population migrated',
+                },
+                {
+                  type: 'create',
+                  target: newLocation.name,
+                  description: `${migrationSize} colonists founded new settlement`,
+                },
+              ],
             },
           });
         }
