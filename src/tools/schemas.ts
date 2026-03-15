@@ -87,6 +87,32 @@ export const LoadWorldSchema = z.object({
   worldData: z.string().describe('JSON string of previously saved world data'),
 });
 
+// Export world to file
+export const ExportWorldToFileSchema = z.object({
+  worldId: z.string().describe('World ID to export'),
+  format: z.enum(['json', 'markdown', 'narrative', 'gm_notes'])
+    .optional().default('markdown').describe('Export format'),
+  includeTimeline: z.boolean().optional().default(true)
+    .describe('Include timeline'),
+  includeLocations: z.boolean().optional().default(true)
+    .describe('Include location details'),
+  filePath: z.string().optional()
+    .describe('Custom file path (default: exports/{worldId}_{timestamp}.ext)'),
+});
+
+// Read exported file
+export const ReadExportFileSchema = z.object({
+  filePath: z.string().describe('Path to exported file'),
+  startLine: z.number().optional()
+    .describe('Start line (1-indexed)'),
+  endLine: z.number().optional()
+    .describe('End line (inclusive)'),
+  startByte: z.number().optional()
+    .describe('Start byte offset'),
+  endByte: z.number().optional()
+    .describe('End byte offset (exclusive)'),
+});
+
 // Export all schemas
 export const ToolSchemas = {
   initializeWorld: InitializeWorldSchema,
@@ -96,6 +122,8 @@ export const ToolSchemas = {
   getTimeline: GetTimelineSchema,
   generateLocation: GenerateLocationSchema,
   exportWorld: ExportWorldSchema,
+  exportWorldToFile: ExportWorldToFileSchema,
+  readExportFile: ReadExportFileSchema,
   listWorlds: ListWorldsSchema,
   deleteWorld: DeleteWorldSchema,
 };

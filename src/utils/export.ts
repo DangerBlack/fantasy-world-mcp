@@ -3,6 +3,8 @@
  */
 
 import { WorldState } from '../types';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 export interface ExportOptions {
   format: 'json' | 'markdown' | 'narrative' | 'gm_notes';
@@ -351,5 +353,107 @@ export class ExportFormatter {
     }
 
     return hooks;
+  }
+
+  async exportWorldToFile(
+    world: WorldState, 
+    options: ExportOptions, 
+    filePath: string
+  ): Promise<string> {
+    // Create directory if it doesn't exist
+    const dir = path.dirname(filePath);
+    await fs.mkdir(dir, { recursive: true });
+
+    let content: string;
+    
+    switch (options.format) {
+      case 'json':
+        content = this.formatJSON(world, options);
+        break;
+      case 'markdown':
+        content = this.formatMarkdown(world, options);
+        break;
+      case 'narrative':
+        content = this.formatNarrative(world, options);
+        break;
+      case 'gm_notes':
+        content = this.formatGMNotes(world, options);
+        break;
+      default:
+        content = this.formatMarkdown(world, options);
+    }
+
+    await fs.writeFile(filePath, content, 'utf8');
+    return filePath;
+  }
+
+  async readExportFile(
+    filePath: string,
+    options?: { 
+      startLine?: number; 
+      endLine?: number;
+      startByte?: number;
+      endByte?: number;
+    }
+  ): Promise<{
+    content: string;
+    totalLines: number;
+    totalBytes: number;
+    lineRange: [number, number];
+    byteRange: [number, number];
+    hasMore: boolean;
+  }> {
+    const stats = await fs.stat(filePath);
+    const totalBytes = stats.size;
+    
+    let content: string;
+    let lineRange: [number, number] = [1, 0];
+    let byteRange: [number, number] = [0, totalBytes];
+    let hasMore = false;
+
+    if (options?.startByte !== undefined || options?.endByte !== undefined) {
+      // Byte range read
+      const start = options.startByte ?? 0;
+      const end = options.endByte ?? totalBytes;
+      byteRange = [start, end];
+      
+      const buffer = Buffer.alloc(end - start);
+      const fd = await fs.open(filePath, 'r');
+      try {
+        await fd.read(buffer, 0, end - start, start);
+        content = buffer.toString('utf8');
+      } finally {
+        await fd.close();
+      }
+      
+      hasMore = end < totalBytes;
+    } else if (options?.startLine !== undefined || options?.endLine !== undefined) {
+      // Line range read
+      const fullContent = await fs.readFile(filePath, 'utf8');
+      const lines = fullContent.split('\n');
+      const totalLines = lines.length;
+      
+      const start = (options.startLine ?? 1) - 1; // Convert to 0-indexed
+      const end = options.endLine ?? totalLines;
+      lineRange = [options.startLine ?? 1, end];
+      
+      content = lines.slice(start, end).join('\n');
+      hasMore = end < totalLines;
+    } else {
+      // Read entire file
+      content = await fs.readFile(filePath, 'utf8');
+      lineRange = [1, content.split('\n').length];
+      byteRange = [0, totalBytes];
+      hasMore = false;
+    }
+
+    return {
+      content,
+      totalLines: lineRange[1],
+      totalBytes,
+      lineRange,
+      byteRange,
+      hasMore,
+    };
   }
 }

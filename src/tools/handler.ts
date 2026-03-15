@@ -184,6 +184,59 @@ export class ToolHandler {
     });
   }
 
+  async exportWorldToFile(args: {
+    worldId: string;
+    format?: string;
+    includeTimeline?: boolean;
+    includeLocations?: boolean;
+    filePath?: string;
+  }): Promise<{ filePath: string; size: number; format: string }> {
+    const world = this.worldManager.getWorld(args.worldId);
+    if (!world) {
+      throw new Error(`World ${args.worldId} not found`);
+    }
+
+    const format = (args.format || 'markdown') as any;
+    const defaultPath = `exports/${args.worldId}_${Date.now()}.${format === 'json' ? 'json' : 'md'}`;
+    const filePath = args.filePath || defaultPath;
+
+    await this.exportFormatter.exportWorldToFile(world, {
+      format,
+      includeTimeline: args.includeTimeline ?? true,
+      includeLocations: args.includeLocations ?? true,
+    }, filePath);
+
+    const stats = await import('fs').then(fs => fs.promises.stat(filePath));
+    
+    return {
+      filePath,
+      size: stats.size,
+      format,
+    };
+  }
+
+  async readExportFile(args: {
+    filePath: string;
+    startLine?: number;
+    endLine?: number;
+    startByte?: number;
+    endByte?: number;
+  }): Promise<{
+    content: string;
+    totalLines: number;
+    totalBytes: number;
+    lineRange: [number, number];
+    byteRange: [number, number];
+    hasMore: boolean;
+  }> {
+    return this.exportFormatter.readExportFile(args.filePath, {
+      startLine: args.startLine,
+      endLine: args.endLine,
+      startByte: args.startByte,
+      endByte: args.endByte,
+    });
+  }
+
   async listWorlds(): Promise<string[]> {
     return await this.worldManager.listWorlds();
   }
