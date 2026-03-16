@@ -237,6 +237,41 @@ export class ToolHandler {
     });
   }
 
+  async listHeroes(args: {
+    worldId: string;
+    status?: string;
+  }): Promise<{ heroes: any[] }> {
+    const world = this.worldManager.getWorld(args.worldId);
+    if (!world) {
+      throw new Error(`World ${args.worldId} not found`);
+    }
+
+    let heroes = world.heroes || [];
+    
+    if (args.status) {
+      heroes = heroes.filter(h => h.status === args.status);
+    }
+
+    return { heroes };
+  }
+
+  async getHero(args: {
+    worldId: string;
+    heroId: string;
+  }): Promise<{ hero: any }> {
+    const world = this.worldManager.getWorld(args.worldId);
+    if (!world) {
+      throw new Error(`World ${args.worldId} not found`);
+    }
+
+    const hero = world.heroes?.find(h => h.id === args.heroId);
+    if (!hero) {
+      throw new Error(`Hero ${args.heroId} not found in world ${args.worldId}`);
+    }
+
+    return { hero };
+  }
+
   async listWorlds(): Promise<string[]> {
     return await this.worldManager.listWorlds();
   }

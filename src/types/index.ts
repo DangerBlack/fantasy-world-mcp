@@ -86,6 +86,24 @@ export enum QuestStatus {
   ABANDONED = 'abandoned',
 }
 
+export enum HeroStatus {
+  ALIVE = 'alive',
+  DEAD = 'dead',
+  MISSING = 'missing',
+  RETIRED = 'retired',
+}
+
+export enum HeroClass {
+  WARRIOR = 'warrior',
+  MAGE = 'mage',
+  ROGUE = 'rogue',
+  CLERIC = 'cleric',
+  RANGER = 'ranger',
+  PALADIN = 'paladin',
+  BARBARIAN = 'barbarian',
+  BARD = 'bard',
+}
+
 export enum QuestType {
   MONSTER_HUNT = 'monster_hunt',
   DISEASE_CURE = 'disease_cure',
@@ -156,7 +174,7 @@ export interface Quest {
   relatedCraftId?: string; // If artifact-related
   reward?: string;
   requiredHeroes?: number; // Number of heroes needed
-  assignedHeroes: string[]; // Hero population IDs (empty = open for players)
+  assignedHeroes: string[]; // Hero IDs (empty = open for players)
   deadline?: number; // Year by which it must be completed
   failureConsequences: string;
   successConsequences: string;
@@ -164,6 +182,32 @@ export interface Quest {
   completedAt?: number;
   failureReason?: string;
   completionNotes?: string;
+}
+
+export interface Hero {
+  id: string;
+  name: string;
+  race: string;
+  culture: string;
+  heroClass: HeroClass;
+  status: HeroStatus;
+  stats: {
+    strength: number;
+    dexterity: number;
+    intelligence: number;
+    charisma: number;
+    constitution: number;
+  };
+  skills: string[];
+  inventory: string[]; // Craft IDs
+  quests: string[]; // Quest IDs
+  achievements: string[]; // Notable accomplishments
+  deathYear?: number;
+  deathCause?: string;
+  commemorationCraftId?: string; // ID of book/item created when hero dies/succeeds
+  originPopulationId: string;
+  spawnedYear: number;
+  lineage?: string; // Famous ancestor's name
 }
 
 export enum CraftRarity {
@@ -283,6 +327,7 @@ export interface SocietyLayer {
   technologies: string[];
   crafts: string[]; // IDs of all crafts in the world
   quests: string[]; // IDs of all quests
+  heroes: string[]; // IDs of all heroes in the world
   conflicts: {
     parties: string[];
     status: 'ongoing' | 'resolved' | 'potential';
@@ -329,6 +374,7 @@ export interface WorldState {
   events: Event[];
   crafts: Craft[]; // All crafts in the world
   quests: Quest[]; // All quests in the world
+  heroes: Hero[]; // All heroes in the world
   beliefs: Belief[]; // All beliefs in the world
   timeline: Timeline;
   metadata: {

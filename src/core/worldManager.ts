@@ -231,6 +231,7 @@ export class WorldManager {
         technologies: [],
         crafts: [],
         quests: [],
+        heroes: [],
         conflicts: [],
         tradeRoutes: [],
       },
@@ -238,6 +239,7 @@ export class WorldManager {
       events: initialEvents,
       crafts: [],
       quests: [],
+      heroes: [],
       beliefs: [],
       timeline: {
         events: initialEvents,

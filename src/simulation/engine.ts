@@ -17,6 +17,7 @@ import {
   BeliefModule,
   ResourceModule,
   ConflictModule,
+  HeroModule,
 } from './modules';
 
 export class SimulationEngine {
@@ -32,6 +33,7 @@ export class SimulationEngine {
   private beliefModule: BeliefModule;
   private resourceModule: ResourceModule;
   private conflictModule: ConflictModule;
+  private heroModule: HeroModule;
 
   constructor(worldManager: WorldManager, seed: string) {
     this.worldManager = worldManager;
@@ -46,6 +48,7 @@ export class SimulationEngine {
     this.beliefModule = new BeliefModule(this.rng);
     this.resourceModule = new ResourceModule(this.rng);
     this.conflictModule = new ConflictModule(this.rng);
+    this.heroModule = new HeroModule(this.rng);
   }
 
   simulate(worldId: string, params: SimulationParams): WorldState {
@@ -178,6 +181,27 @@ export class SimulationEngine {
 
     // Quest generation
     events.push(...this.questModule.checkQuestGeneration(world, currentYear, nextYear));
+
+    // Hero spawning for open quests
+    const heroResult = this.heroModule.checkHeroSpawning(world, nextYear);
+    for (const hero of heroResult.spawned) {
+      events.push({
+        id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        year: nextYear,
+        type: 'hero_spawned' as any,
+        title: `Hero Born: ${hero.name}`,
+        description: `${hero.name}, a ${hero.heroClass} from ${hero.culture}, emerges to answer the call`,
+        causes: [],
+        effects: [],
+        impact: {
+          society: [{
+            type: 'create',
+            target: hero.name,
+            description: `New hero ${hero.name} spawned`,
+          }],
+        },
+      });
+    }
 
     // Craft generation
     events.push(...this.craftModule.checkCraftGeneration(world, currentYear, nextYear));

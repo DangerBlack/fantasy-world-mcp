@@ -10,3 +10,4 @@ export { CraftModule } from './crafts';
 export { BeliefModule } from './beliefs';
 export { ResourceModule } from './resources';
 export { ConflictModule } from './conflict';
+export { HeroModule } from './heroes';

@@ -113,6 +113,19 @@ export const ReadExportFileSchema = z.object({
     .describe('End byte offset (exclusive)'),
 });
 
+// List heroes
+export const ListHeroesSchema = z.object({
+  worldId: z.string().describe('World ID to list heroes from'),
+  status: z.enum(['alive', 'dead', 'missing', 'retired']).optional()
+    .describe('Filter by hero status'),
+});
+
+// Get hero details
+export const GetHeroSchema = z.object({
+  worldId: z.string().describe('World ID'),
+  heroId: z.string().describe('Hero ID to retrieve'),
+});
+
 // Export all schemas
 export const ToolSchemas = {
   initializeWorld: InitializeWorldSchema,
@@ -124,6 +137,8 @@ export const ToolSchemas = {
   exportWorld: ExportWorldSchema,
   exportWorldToFile: ExportWorldToFileSchema,
   readExportFile: ReadExportFileSchema,
+  listHeroes: ListHeroesSchema,
+  getHero: GetHeroSchema,
   listWorlds: ListWorldsSchema,
   deleteWorld: DeleteWorldSchema,
 };

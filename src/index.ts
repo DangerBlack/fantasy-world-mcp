@@ -242,6 +242,43 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: 'listHeroes',
+    description: 'List all heroes in a world, optionally filtered by status',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        worldId: {
+          type: 'string',
+          description: 'World ID to list heroes from',
+        },
+        status: {
+          type: 'string',
+          enum: ['alive', 'dead', 'missing', 'retired'],
+          description: 'Filter by hero status',
+        },
+      },
+      required: ['worldId'],
+    },
+  },
+  {
+    name: 'getHero',
+    description: 'Get detailed information about a specific hero',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        worldId: {
+          type: 'string',
+          description: 'World ID',
+        },
+        heroId: {
+          type: 'string',
+          description: 'Hero ID to retrieve',
+        },
+      },
+      required: ['worldId', 'heroId'],
+    },
+  },
+  {
     name: 'listWorlds',
     description: 'List all created worlds',
     inputSchema: {
@@ -553,6 +590,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 success: true,
                 worlds: result,
                 count: result.length,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'listHeroes': {
+        const result = await toolHandler.listHeroes(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                heroes: result.heroes,
+                count: result.heroes.length,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'getHero': {
+        const result = await toolHandler.getHero(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                hero: result.hero,
               }, null, 2),
             },
           ],
