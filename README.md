@@ -1,6 +1,6 @@
-# World Evolution MCP Server
+# Fantasy World MCP Simulator
 
-A Model Context Protocol (MCP) server for procedural fantasy world evolution simulation. Starting from a simple event (like "a small cave"), it simulates anthropological and geographical changes over centuries, generating rich history, dungeons, cities, and events for fantasy settings.
+A Model Context Protocol (MCP) server for procedural fantasy world generation and evolution simulation. Starting from a simple event (like "a small cave"), it simulates anthropological and geographical changes over centuries, generating rich history, dungeons, cities, and events for fantasy settings.
 
 ## Features
 
@@ -20,7 +20,7 @@ A Model Context Protocol (MCP) server for procedural fantasy world evolution sim
 
 ```bash
 # Clone or navigate to the project
-cd dnd_think
+cd fantasy-world-mcp
 
 # Install dependencies
 npm install
@@ -45,7 +45,7 @@ Add this to the `"mcp"` section of your config:
 "mcp": {
     "world-evolution": {
         "type": "local",
-        "command": ["node", "/home/danger/Documents/progetti/dnd_think/dist/index.js"]
+        "command": ["node", "/path/to/fantasy-world-mcp/dist/index.js"]
     }
 }
 ```
@@ -58,7 +58,7 @@ opencode mcp list
 You should see:
 ```
 ✓ world-evolution connected
-  node /home/danger/Documents/progetti/dnd_think/dist/index.js
+  node /path/to/fantasy-world-mcp/dist/index.js
 ```
 
 **Important:** The `resources` parameter must be explicitly set (even to an empty object `{}`) when initializing a world, otherwise the API will fail.
@@ -74,8 +74,8 @@ Add to your MCP client configuration:
   "mcpServers": {
     "world-evolution": {
       "command": "node",
-      "args": ["/path/to/dnd_think/dist/index.js"],
-      "cwd": "/path/to/dnd_think"
+      "args": ["/path/to/fantasy-world-mcp/dist/index.js"],
+      "cwd": "/path/to/fantasy-world-mcp"
     }
   }
 }
@@ -88,7 +88,7 @@ Add to your MCP client configuration:
   "mcpServers": {
     "world-evolution": {
       "command": "npx",
-      "args": ["-y", "tsx", "/path/to/dnd_think/src/index.ts"]
+      "args": ["-y", "tsx", "/path/to/fantasy-world-mcp/src/index.ts"]
     }
   }
 }
