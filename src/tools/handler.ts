@@ -4,19 +4,23 @@
 
 import { WorldManager } from '../core/worldManager';
 import { SimulationEngine } from '../simulation/engine';
-import { InitialConditions, SimulationParams, Craft, CraftCategory, CraftRarity, Quest, QuestType, QuestStatus, EventType } from '../types';
+import { InitialConditions, SimulationParams, Craft, CraftCategory, CraftRarity, Quest, QuestType, QuestStatus, EventType, WorldState } from '../types';
 import { ExportFormatter } from '../utils/export';
 import { v4 as uuidv4 } from 'uuid';
+import { HeroModule } from '../simulation/modules/heroes';
+import { SeededRandom } from '../utils/random';
 
 export class ToolHandler {
   private worldManager: WorldManager;
   private simulationEngine: SimulationEngine;
   private exportFormatter: ExportFormatter;
+  private heroModule: HeroModule;
 
   constructor(seed: string) {
     this.worldManager = new WorldManager(seed);
     this.simulationEngine = new SimulationEngine(this.worldManager, seed);
     this.exportFormatter = new ExportFormatter();
+    this.heroModule = new HeroModule(new SeededRandom(seed));
   }
 
   async initializeWorld(args: {
@@ -429,7 +433,91 @@ export class ToolHandler {
       quest.failureReason = args.failureReason;
     }
 
-    // Create event
+    // Handle hero quest completion consequences
+    const heroResult = this.heroModule.handleQuestCompletion(world, quest, args.success, args.completionNotes);
+    
+    // Process hero deaths - create HERO_DEATH events
+    for (const hero of heroResult.deaths) {
+      const event = {
+        id: uuidv4(),
+        year: world.timestamp,
+        type: EventType.HERO_DEATH,
+        title: `${hero.name} Falls`,
+        description: `${hero.name} dies: ${hero.deathCause}`,
+        causes: [],
+        effects: [],
+        impact: {
+          society: [{
+            type: 'destroy' as const,
+            target: hero.name,
+            description: `Hero ${hero.name} has died`,
+          }],
+        },
+      };
+      world.events.push(event);
+      world.timeline.events.push(event);
+    }
+
+    // Process commemorations - they are already created by handleQuestCompletion
+    for (const commemoration of heroResult.commemorations) {
+      // Add commemoration to world crafts
+      if (!world.crafts) world.crafts = [];
+      world.crafts.push(commemoration);
+      
+      // Add to society crafts
+      if (!world.society.crafts) world.society.crafts = [];
+      if (!world.society.crafts.includes(commemoration.id)) {
+        world.society.crafts.push(commemoration.id);
+      }
+
+      // Create commemoration event
+      const event = {
+        id: uuidv4(),
+        year: world.timestamp,
+        type: EventType.COMMEMORATION_CREATED,
+        title: `${commemoration.name}`,
+        description: commemoration.description,
+        causes: [],
+        effects: [],
+        impact: {
+          society: [{
+            type: 'create' as const,
+            target: commemoration.name,
+            description: `Created ${commemoration.category} to honor hero's deeds`,
+          }],
+        },
+      };
+      world.events.push(event);
+      world.timeline.events.push(event);
+    }
+
+    // Process hero achievements - create HERO_ACHIEVEMENT events if needed
+    for (const hero of heroResult.deaths) {
+      // Check for new achievements
+      const quest = world.quests.find(q => q.assignedHeroes?.includes(hero.id));
+      if (quest && quest.status === QuestStatus.COMPLETED) {
+        const event = {
+          id: uuidv4(),
+          year: world.timestamp,
+          type: EventType.HERO_ACHIEVEMENT,
+          title: `${hero.name} Achieves: ${quest.title}`,
+          description: `${hero.name} has completed the quest "${quest.title}"`,
+          causes: [],
+          effects: [],
+          impact: {
+            society: [{
+              type: 'create' as const,
+              target: hero.name,
+              description: `Hero achieved: ${quest.title}`,
+            }],
+          },
+        };
+        world.events.push(event);
+        world.timeline.events.push(event);
+      }
+    }
+
+    // Create quest completion event
     const eventType = args.success ? EventType.QUEST_COMPLETED : EventType.QUEST_FAILED;
     const event = {
       id: uuidv4(),
@@ -456,6 +544,75 @@ export class ToolHandler {
     await this.worldManager.updateWorld(args.worldId, world);
 
     return { success: true, quest };
+  }
+
+  async assignHeroToQuest(args: {
+    worldId: string;
+    questId: string;
+    heroId: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const world = this.worldManager.getWorld(args.worldId);
+    if (!world || !world.quests) {
+      throw new Error(`World ${args.worldId} not found or no quests`);
+    }
+
+    const quest = world.quests.find(q => q.id === args.questId);
+    if (!quest) {
+      throw new Error(`Quest ${args.questId} not found`);
+    }
+
+    const hero = world.heroes?.find(h => h.id === args.heroId);
+    if (!hero) {
+      throw new Error(`Hero ${args.heroId} not found`);
+    }
+
+    // Check if hero is already assigned
+    if (quest.assignedHeroes?.includes(args.heroId)) {
+      return { success: true, message: `Hero ${args.heroId} is already assigned to quest ${args.questId}` };
+    }
+
+    // Add hero to quest
+    if (!quest.assignedHeroes) {
+      quest.assignedHeroes = [];
+    }
+    quest.assignedHeroes.push(args.heroId);
+
+    // Add quest to hero's quest list
+    if (!hero.quests) {
+      hero.quests = [];
+    }
+    if (!hero.quests.includes(args.questId)) {
+      hero.quests.push(args.questId);
+    }
+
+    // Update quest status to in_progress if it was open
+    if (quest.status === QuestStatus.OPEN) {
+      quest.status = QuestStatus.IN_PROGRESS;
+    }
+
+    // Create event
+    const event = {
+      id: uuidv4(),
+      year: world.timestamp,
+      type: EventType.QUEST_GENERATED,
+      title: `Hero Assigned: ${hero.name} to ${quest.title}`,
+      description: `${hero.name} has been assigned to the quest "${quest.title}"`,
+      causes: [],
+      effects: [],
+      impact: {
+        society: [{
+          type: 'create' as const,
+          target: hero.name,
+          description: `Hero assigned to quest`,
+        }],
+      },
+    };
+    world.events.push(event);
+    world.timeline.events.push(event);
+
+    await this.worldManager.updateWorld(args.worldId, world);
+
+    return { success: true, message: `Hero ${args.heroId} assigned to quest ${args.questId}` };
   }
 
   private getSnapshotAt(world: any, year: number): any {

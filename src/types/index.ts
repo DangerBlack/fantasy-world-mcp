@@ -27,6 +27,10 @@ export enum EventType {
   TEMPLE_BUILT = 'temple_built',
   HERESY = 'heresy',
   PILGRIMAGE = 'pilgrimage',
+  HERO_DEATH = 'hero_death',
+  HERO_RETIREMENT = 'hero_retirement',
+  COMMEMORATION_CREATED = 'commemoration_created',
+  HERO_ACHIEVEMENT = 'hero_achievement',
 }
 
 export enum LocationType {

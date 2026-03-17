@@ -126,6 +126,12 @@ export const GetHeroSchema = z.object({
   heroId: z.string().describe('Hero ID to retrieve'),
 });
 
+// Assign hero to quest
+export const AssignHeroToQuestSchema = z.object({
+  questId: z.string().describe('Quest ID to assign hero to'),
+  heroId: z.string().describe('Hero ID to assign'),
+});
+
 // Export all schemas
 export const ToolSchemas = {
   initializeWorld: InitializeWorldSchema,
@@ -139,6 +145,7 @@ export const ToolSchemas = {
   readExportFile: ReadExportFileSchema,
   listHeroes: ListHeroesSchema,
   getHero: GetHeroSchema,
+  assignHeroToQuest: AssignHeroToQuestSchema,
   listWorlds: ListWorldsSchema,
   deleteWorld: DeleteWorldSchema,
 };

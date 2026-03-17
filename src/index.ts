@@ -451,6 +451,28 @@ const TOOLS: Tool[] = [
       required: ['worldId', 'questId', 'success'],
     },
   },
+  {
+    name: 'assignHeroToQuest',
+    description: 'Assign a hero to an open quest.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        worldId: {
+          type: 'string',
+          description: 'World ID',
+        },
+        questId: {
+          type: 'string',
+          description: 'Quest ID to assign hero to',
+        },
+        heroId: {
+          type: 'string',
+          description: 'Hero ID to assign',
+        },
+      },
+      required: ['worldId', 'questId', 'heroId'],
+    },
+  },
 ];
 
 // Server instance - persists across tool calls
@@ -702,6 +724,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 success: true,
                 quest: result.quest,
                 message: `Quest ${questArgs.success ? 'completed' : 'failed'}: ${result.quest.title}`,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'assignHeroToQuest': {
+        const assignArgs = args as any;
+        const result = await toolHandler.assignHeroToQuest(assignArgs);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                message: result.message,
               }, null, 2),
             },
           ],

@@ -5,7 +5,7 @@
  * Refactored to use modular simulation components
  */
 
-import { WorldState, Event, SimulationParams, Change, Resource } from '../types';
+import { WorldState, Event, SimulationParams, Change, Resource, EventType, QuestStatus } from '../types';
 import { WorldManager } from '../core/worldManager';
 import { SeededRandom } from '../utils/random';
 import {
@@ -19,6 +19,7 @@ import {
   ConflictModule,
   HeroModule,
 } from './modules';
+import { v4 as uuidv4 } from 'uuid';
 
 export class SimulationEngine {
   private worldManager: WorldManager;
@@ -63,6 +64,9 @@ export class SimulationEngine {
       const currentYear = world.timestamp;
       const nextYear = currentYear + params.stepSize;
 
+      // Check for quests with expired deadlines
+      this.checkQuestDeadlines(world, nextYear);
+
       // Evaluate all active rules using modules
       const newEvents = this.evaluateRules(world, currentYear, nextYear, params);
       
@@ -85,6 +89,101 @@ export class SimulationEngine {
     
     this.worldManager.updateWorld(worldId, world);
     return world;
+  }
+
+  private checkQuestDeadlines(world: WorldState, currentYear: number): void {
+    if (!world.quests) return;
+
+    for (const quest of world.quests) {
+      // Skip already completed/failed/abandoned quests
+      if (quest.status !== QuestStatus.OPEN && quest.status !== QuestStatus.IN_PROGRESS) {
+        continue;
+      }
+
+      // Check if deadline has passed
+      if (quest.deadline !== undefined && currentYear > quest.deadline) {
+        // Mark quest as failed
+        quest.status = QuestStatus.FAILED;
+        quest.failureReason = `Deadline expired at year ${quest.deadline}`;
+        quest.completedAt = currentYear;
+
+        // Handle hero consequences for failed quest
+        const heroResult = this.heroModule.handleQuestCompletion(world, quest, false, undefined);
+
+        // Create quest failed event
+        const event: Event = {
+          id: uuidv4(),
+          year: currentYear,
+          type: EventType.QUEST_FAILED,
+          title: `Quest Failed: ${quest.title}`,
+          description: `The quest "${quest.title}" failed due to expired deadline. ${quest.failureConsequences}`,
+          causes: [],
+          effects: [],
+          impact: {
+            society: [{
+              type: 'destroy',
+              target: quest.title,
+              description: quest.failureConsequences,
+            }],
+          },
+        };
+
+        world.events.push(event);
+        world.timeline.events.push(event);
+
+        // Process hero deaths from failed quest
+        for (const hero of heroResult.deaths) {
+          const deathEvent: Event = {
+            id: uuidv4(),
+            year: currentYear,
+            type: EventType.HERO_DEATH,
+            title: `${hero.name} Falls`,
+            description: `${hero.name} dies: ${hero.deathCause}`,
+            causes: [],
+            effects: [],
+            impact: {
+              society: [{
+                type: 'destroy',
+                target: hero.name,
+                description: `Hero ${hero.name} has died`,
+              }],
+            },
+          };
+          world.events.push(deathEvent);
+          world.timeline.events.push(deathEvent);
+        }
+
+        // Process commemorations
+        for (const commemoration of heroResult.commemorations) {
+          if (!world.crafts) world.crafts = [];
+          world.crafts.push(commemoration);
+          
+          if (!world.society.crafts) world.society.crafts = [];
+          if (!world.society.crafts.includes(commemoration.id)) {
+            world.society.crafts.push(commemoration.id);
+          }
+
+          const commEvent: Event = {
+            id: uuidv4(),
+            year: currentYear,
+            type: EventType.COMMEMORATION_CREATED,
+            title: `${commemoration.name}`,
+            description: commemoration.description,
+            causes: [],
+            effects: [],
+            impact: {
+              society: [{
+                type: 'create',
+                target: commemoration.name,
+                description: `Created ${commemoration.category} to honor hero's deeds`,
+              }],
+            },
+          };
+          world.events.push(commEvent);
+          world.timeline.events.push(commEvent);
+        }
+      }
+    }
   }
 
   private applyEventEffects(world: WorldState, event: Event): void {
