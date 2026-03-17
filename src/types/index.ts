@@ -31,6 +31,7 @@ export enum EventType {
   HERO_RETIREMENT = 'hero_retirement',
   COMMEMORATION_CREATED = 'commemoration_created',
   HERO_ACHIEVEMENT = 'hero_achievement',
+  TECH_MILESTONE = 'tech_milestone',
 }
 
 export enum LocationType {

@@ -3,8 +3,8 @@
  * Handles resource consumption, regeneration, and technological progress
  */
 
-import { Event, Resource, Population } from '../../types';
-import { WorldState } from '../../types';
+import { Event, Resource, Population, WorldState, EventType, CraftRarity } from '../../types';
+import { WorldState as WorldStateType } from '../../types';
 import { SeededRandom } from '../../utils/random';
 
 export class ResourceModule {
@@ -127,12 +127,50 @@ export class ResourceModule {
     for (const population of world.society.populations) {
       if (population.race === 'monster') continue;
 
-      // Technology progression chance based on current level
-      const techProgressChance = 0.02 + (population.technologyLevel * 0.005);
-      
-      if (this.rng.boolean(techProgressChance)) {
-        // Determine what technology to discover
-        const availableTechnologies = this.getAvailableTechnologies(population.technologyLevel);
+      // NEW TECH PROGRESSION FORMULA
+      // Base chance: 5%
+      let techChance = 0.05;
+
+      // Population size bonus: +0.1% per 100 people (max +5%)
+      const popBonus = Math.min(population.size / 1000, 0.05);
+      techChance += popBonus;
+
+      // Organization bonus
+      const orgBonuses = { 'nomadic': 0, 'tribal': 0, 'feudal': 0.02, 'kingdom': 0.04, 'empire': 0.06 };
+      techChance += orgBonuses[population.organization] || 0;
+
+      // Active critical quests bonus: +3% per quest (max +9%)
+      const criticalQuests = this.countCriticalQuestsForPopulation(world, population.id);
+      const questBonus = Math.min(criticalQuests * 0.03, 0.09);
+      techChance += questBonus;
+
+      // Problem overload penalty: -2% if >5 critical quests
+      if (criticalQuests > 5) {
+        techChance -= 0.02;
+      }
+
+      // Resource abundance bonus: +1% per abundant resource (resource > 60)
+      const abundantResources = this.countAbundantResources(world, population);
+      techChance += abundantResources * 0.01;
+
+      // Relic/artifact bonus: +5% if population has legendary/mythic item
+      const hasLegendaryRelic = this.populationHasLegendaryRelic(world, population.id);
+      if (hasLegendaryRelic) {
+        techChance += 0.05;
+      }
+
+      // Trade route bonus: +2% if population has active trade routes
+      const hasTradeRoutes = this.populationHasTradeRoutes(world, population.id);
+      if (hasTradeRoutes) {
+        techChance += 0.02;
+      }
+
+      // Cap at 50% max
+      techChance = Math.min(techChance, 0.50);
+
+      if (this.rng.boolean(techChance)) {
+        // Determine what technology to discover based on tech tree
+        const availableTechnologies = this.getAvailableTechnologies(population.technologyLevel, world.society.technologies);
         
         if (availableTechnologies.length > 0) {
           const newTech = this.rng.pick(availableTechnologies);
@@ -140,27 +178,31 @@ export class ResourceModule {
           if (!world.society.technologies.includes(newTech)) {
             world.society.technologies.push(newTech);
             
-            // Increase population technology level if they've reached certain milestones
-            const techLevelMapping: Record<string, number> = {
-              'Agriculture': 2,
-              'Pottery': 2,
-              'Bronze Working': 3,
-              'Iron Working': 4,
-              'Wheel': 3,
-              'Writing': 4,
-              'Mathematics': 5,
-              'Architecture': 5,
-              'Medicine': 6,
-              'Irrigation': 6,
-              'Steel': 7,
-              'Gunpowder': 8,
-              'Printing': 7,
-              'Navigation': 5,
-            };
+            // Get the tech level for this technology
+            const newTechLevel = this.getTechLevelForTechnology(newTech);
             
-            const newLevel = techLevelMapping[newTech];
-            if (newLevel && population.technologyLevel < newLevel) {
-              population.technologyLevel = newLevel;
+            // Update population technology level if they've reached a new milestone
+            if (newTechLevel && population.technologyLevel < newTechLevel) {
+              const oldLevel = population.technologyLevel;
+              population.technologyLevel = newTechLevel;
+              
+              // Create TECH_MILESTONE event
+              events.push({
+                id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                year: nextYear,
+                type: EventType.TECH_MILESTONE,
+                title: `Tech Level ${newTechLevel}: ${newTech}`,
+                description: `${population.name} has reached technology level ${newTechLevel} with the discovery of ${newTech}`,
+                causes: [],
+                effects: [],
+                impact: {
+                  society: [{
+                    type: 'create',
+                    target: `TechLevel_${newTechLevel}`,
+                    description: `Population advanced to tech level ${newTechLevel}`,
+                  }],
+                },
+              });
             }
 
             events.push({
@@ -187,24 +229,168 @@ export class ResourceModule {
     return events;
   }
 
-  private getAvailableTechnologies(techLevel: number): string[] {
-    const technologiesByLevel: Record<number, string[]> = {
-      0: ['Agriculture', 'Pottery'],
-      2: ['Bronze Working', 'Wheel'],
-      3: ['Iron Working', 'Writing'],
-      4: ['Mathematics', 'Architecture'],
-      5: ['Navigation', 'Medicine', 'Irrigation'],
-      6: ['Steel', 'Printing'],
-      7: ['Gunpowder'],
+  /**
+   * Count active critical quests for a population
+   */
+  countCriticalQuestsForPopulation(world: WorldState, populationId: string): number {
+    if (!world.quests) return 0;
+    
+    return world.quests.filter(q => 
+      q.originPopulationId === populationId &&
+      q.urgency === 'critical' &&
+      (q.status === 'open' || q.status === 'in_progress')
+    ).length;
+  }
+
+  /**
+   * Count abundant resources (value > 60) for a population
+   */
+  countAbundantResources(world: WorldState, population: Population): number {
+    let count = 0;
+    for (const resource of Object.values(Resource)) {
+      if (resource === Resource.FOOD || resource === Resource.WATER) continue;
+      const amount = world.geography.resources[resource] || 0;
+      if (amount > 60) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Check if population has legendary or mythic crafts
+   */
+  populationHasLegendaryRelic(world: WorldState, populationId: string): boolean {
+    if (!world.crafts) return false;
+    
+    const population = world.society.populations.find(p => p.id === populationId);
+    if (!population) return false;
+    
+    const populationCrafts = world.crafts.filter(c => 
+      c.creatorPopulationId === populationId || 
+      population.crafts.includes(c.id)
+    );
+    
+    return populationCrafts.some(c => 
+      c.rarity === CraftRarity.LEGENDARY || 
+      c.rarity === CraftRarity.MYTHIC
+    );
+  }
+
+  /**
+   * Check if population has active trade routes
+   */
+  populationHasTradeRoutes(world: WorldState, populationId: string): boolean {
+    // Find locations inhabited by this population
+    const populationLocations = world.locations
+      .filter(loc => loc.inhabitants.includes(populationId))
+      .map(loc => loc.id);
+    
+    // Check if any trade routes connect to these locations
+    return world.society.tradeRoutes.some(route => 
+      populationLocations.includes(route.from) || 
+      populationLocations.includes(route.to)
+    );
+  }
+
+  /**
+   * Get the tech level for a specific technology
+   */
+  getTechLevelForTechnology(techName: string): number | null {
+    const techLevelMapping: Record<string, number> = {
+      // Level 0 - Stone Age
+      'Stone Tools': 0,
+      'Fire Mastery': 0,
+      'Basic Shelter': 0,
+      
+      // Level 1 - Social Development
+      'Language Development': 1,
+      'Social Cooperation': 1,
+      
+      // Level 2 - Neolithic
+      'Agriculture': 2,
+      'Pottery': 2,
+      'Domestication': 2,
+      'Basic Medicine': 2,
+      
+      // Level 3 - Bronze Age
+      'Bronze Working': 3,
+      'Wheel': 3,
+      'Writing': 3,
+      'Irrigation': 3,
+      'Mining': 3,
+      
+      // Level 4 - Iron Age
+      'Iron Working': 4,
+      'Architecture': 4,
+      'Mathematics': 4,
+      'Law': 4,
+      
+      // Level 5 - Classical
+      'Steel': 5,
+      'Navigation': 5,
+      'Philosophy': 5,
+      'Advanced Medicine': 5,
+      
+      // Level 6 - Medieval
+      'Gunpowder': 6,
+      'Printing': 6,
+      'Telescope': 6,
+      'Banking': 6,
+      
+      // Level 7 - Early Modern
+      'Industrial Revolution': 7,
+      'Steam Power': 7,
+      'Electricity': 7,
+      
+      // Level 8 - Industrial
+      'Telegraph': 8,
+      'Railways': 8,
+      'Mass Production': 8,
+      
+      // Level 9 - Modern
+      'Electricity Grid': 9,
+      'Internal Combustion': 9,
+      'Aviation': 9,
+      
+      // Level 10 - Contemporary (cap)
+      'Modern Computing': 10,
+      'Internet': 10,
+      'Space Technology': 10,
+    };
+    
+    return techLevelMapping[techName] ?? null;
+  }
+
+  /**
+   * Get available technologies based on current tech level
+   * Technologies unlock in order - can't discover level N+1 without completing level N
+   */
+  private getAvailableTechnologies(techLevel: number, societyTechnologies: string[]): string[] {
+    // Complete tech tree with prerequisites
+    const techTree: Record<number, string[]> = {
+      0: ['Stone Tools', 'Fire Mastery', 'Basic Shelter'],
+      1: ['Language Development', 'Social Cooperation'],
+      2: ['Agriculture', 'Pottery', 'Domestication', 'Basic Medicine'],
+      3: ['Bronze Working', 'Wheel', 'Writing', 'Irrigation', 'Mining'],
+      4: ['Iron Working', 'Architecture', 'Mathematics', 'Law'],
+      5: ['Steel', 'Navigation', 'Philosophy', 'Advanced Medicine'],
+      6: ['Gunpowder', 'Printing', 'Telescope', 'Banking'],
+      7: ['Industrial Revolution', 'Steam Power', 'Electricity'],
+      8: ['Telegraph', 'Railways', 'Mass Production'],
+      9: ['Electricity Grid', 'Internal Combustion', 'Aviation'],
+      10: ['Modern Computing', 'Internet', 'Space Technology'],  // Cap
     };
 
+    // Can only access technologies up to current level
     const available: string[] = [];
-    for (let level = 0; level <= techLevel; level++) {
-      if (technologiesByLevel[level]) {
-        available.push(...technologiesByLevel[level]);
+    for (let level = 0; level <= Math.min(techLevel, 10); level++) {
+      if (techTree[level]) {
+        available.push(...techTree[level]);
       }
     }
 
-    return available;
+    // Filter out technologies already discovered
+    return available.filter(tech => !societyTechnologies.includes(tech));
   }
 }

@@ -119,7 +119,7 @@ export class HeroModule {
     quest: Quest,
     year: number
   ): Hero {
-    const heroClass = this.determineHeroClass(quest);
+    const heroClass = this.determineHeroClass(quest, population.technologyLevel);
     const name = this.generateHeroName(population.culture, heroClass);
 
     return {
@@ -140,7 +140,11 @@ export class HeroModule {
     };
   }
 
-  private determineHeroClass(quest: Quest): HeroClass {
+  private determineHeroClass(quest: Quest, techLevel: number): HeroClass {
+    // Get available hero classes based on tech level
+    const availableClasses = this.getAvailableHeroClasses(techLevel);
+    
+    // Filter class options by quest type and tech level
     const classByQuest: Record<Quest['type'], HeroClass[]> = {
       [QuestType.MONSTER_HUNT]: [HeroClass.WARRIOR, HeroClass.RANGER, HeroClass.PALADIN],
       [QuestType.DISEASE_CURE]: [HeroClass.CLERIC, HeroClass.MAGE],
@@ -155,8 +159,43 @@ export class HeroModule {
       [QuestType.HERESY_SUPPRESS]: [HeroClass.CLERIC, HeroClass.PALADIN, HeroClass.WARRIOR],
     };
 
-    const classes = classByQuest[quest.type] || [HeroClass.WARRIOR];
-    return this.rng.pick(classes);
+    const questClasses = classByQuest[quest.type] || [HeroClass.WARRIOR];
+    
+    // Filter to only classes available at this tech level
+    const filteredClasses = questClasses.filter(c => availableClasses.includes(c));
+    
+    // If no matching classes, fall back to available basic classes
+    const finalClasses = filteredClasses.length > 0 ? filteredClasses : availableClasses;
+    
+    return this.rng.pick(finalClasses);
+  }
+
+  /**
+   * Get available hero classes based on population tech level
+   * - Level 2+: Can spawn basic heroes (Warrior, Rogue)
+   * - Level 3+: Can spawn specialized heroes (Ranger, Cleric)
+   * - Level 4+: Can spawn elite heroes (Paladin, Barbarian)
+   * - Level 5+: Can spawn rare heroes (Mage, Bard)
+   */
+  getAvailableHeroClasses(techLevel: number): HeroClass[] {
+    const basicHeroes = [HeroClass.WARRIOR, HeroClass.ROGUE];
+    const specializedHeroes = [HeroClass.RANGER, HeroClass.CLERIC];
+    const eliteHeroes = [HeroClass.PALADIN, HeroClass.BARBARIAN];
+    const rareHeroes = [HeroClass.MAGE, HeroClass.BARD];
+
+    const available: HeroClass[] = [...basicHeroes];
+    
+    if (techLevel >= 3) {
+      available.push(...specializedHeroes);
+    }
+    if (techLevel >= 4) {
+      available.push(...eliteHeroes);
+    }
+    if (techLevel >= 5) {
+      available.push(...rareHeroes);
+    }
+
+    return available;
   }
 
   private generateHeroName(culture: string, heroClass: HeroClass): string {

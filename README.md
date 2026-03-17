@@ -632,9 +632,52 @@ The engine simulates these anthropological and geographical processes:
 - Organization evolution: nomadic → tribal → feudal → kingdom → empire
 
 ### Technology Progression
-- Agriculture → Pottery → Bronze Working → Masonry → Iron Working
-- Writing → Mathematics → Architecture → Philosophy
-- Discovery chance increases with population size
+
+Populations discover technologies through a dynamic progression system based on multiple factors:
+
+**Tech Progression Formula:**
+- **Base chance**: 5% per population per 10-year step
+- **Population size bonus**: +0.1% per 100 people (max +5%)
+- **Organization bonus**: tribal +0%, feudal +2%, kingdom +4%, empire +6%
+- **Critical quest bonus**: +3% per active critical quest (max +9%)
+- **Problem overload penalty**: -2% if >5 active critical quests
+- **Resource abundance bonus**: +1% per abundant resource (value > 60)
+- **Relic/artifact bonus**: +5% if population has legendary/mythic item
+- **Trade route bonus**: +2% if population has active trade routes
+- **Maximum chance**: 50%
+
+**Complete Tech Tree:**
+
+| Level | Technologies | Era |
+|-------|-------------|-----|
+| 0 | Stone Tools, Fire Mastery, Basic Shelter | Stone Age |
+| 1 | Language Development, Social Cooperation | Early Society |
+| 2 | Agriculture, Pottery, Domestication, Basic Medicine | Neolithic |
+| 3 | Bronze Working, Wheel, Writing, Irrigation, Mining | Bronze Age |
+| 4 | Iron Working, Architecture, Mathematics, Law | Iron Age |
+| 5 | Steel, Navigation, Philosophy, Advanced Medicine | Classical |
+| 6 | Gunpowder, Printing, Telescope, Banking | Medieval |
+| 7 | Industrial Revolution, Steam Power, Electricity | Early Modern |
+| 8 | Telegraph, Railways, Mass Production | Industrial |
+| 9 | Electricity Grid, Internal Combustion, Aviation | Modern |
+| 10 | Modern Computing, Internet, Space Technology | Contemporary (cap) |
+
+**Tech Prerequisites:**
+- Technologies unlock in order by level
+- Can't discover level N+1 technology without completing level N
+- Each technology contributes to the population's technology level
+
+**Tech Milestones:**
+When a population reaches a new tech level, a `TECH_MILESTONE` event is created in the timeline, marking significant societal advancement.
+
+**Tech Level Effects:**
+- **Level 2+**: Can spawn basic heroes (Warrior, Rogue)
+- **Level 3+**: Can spawn specialized heroes (Ranger, Cleric)
+- **Level 4+**: Can spawn elite heroes (Paladin, Barbarian)
+- **Level 5+**: Can spawn rare heroes (Mage, Bard)
+
+**Relics and Tech:**
+Populations with legendary or mythic crafts/artifacts receive a +5% bonus to tech progression, representing the knowledge and inspiration gained from powerful items.
 
 ### Location Evolution
 - Cave → Settlement (50 years, 30+ population, tech level 3)
