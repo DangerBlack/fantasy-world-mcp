@@ -6,7 +6,7 @@
 import { Event, Location, LocationType } from '../../types';
 import { WorldState } from '../../types';
 import { SeededRandom } from '../../utils/random';
-import { v4 as uuidv4 } from 'uuid';
+import { generateEventId, generateLocationId } from '../../utils/idGenerator';
 
 export class LocationModule {
   private rng: SeededRandom;
@@ -34,9 +34,9 @@ export class LocationModule {
             location.dangerLevel = Math.max(1, Math.floor(location.dangerLevel / 2));
 
             events.push({
-              id: uuidv4(),
+              id: generateEventId(),
               year: nextYear,
-              type: 'social' as any,
+            type: 'social' as any,
               title: `${location.name} Abandoned`,
               description: `Without inhabitants, ${location.name} falls into disrepair and becomes ruins`,
               causes: [],
@@ -67,7 +67,7 @@ export class LocationModule {
             location.description = `${location.name} grows into a thriving settlement`;
 
             events.push({
-              id: uuidv4(),
+              id: generateEventId(),
               year: nextYear,
               type: 'social' as any,
               title: `${location.name} Grows`,
@@ -95,7 +95,7 @@ export class LocationModule {
             location.dangerLevel = 2;
 
             events.push({
-              id: uuidv4(),
+              id: generateEventId(),
               year: nextYear,
               type: 'social' as any,
               title: `${location.name} Becomes a City`,
@@ -121,7 +121,7 @@ export class LocationModule {
           location.dangerLevel = 3;
 
           events.push({
-            id: uuidv4(),
+            id: generateEventId(),
             year: nextYear,
             type: 'social' as any,
             title: `${location.name} Fortified`,
@@ -142,7 +142,7 @@ export class LocationModule {
         // Temple construction
         if (population.dominantBelief && location.type !== LocationType.TEMPLE && this.rng.boolean(0.03)) {
           const temple: Location = {
-            id: uuidv4(),
+            id: generateLocationId(),
             type: LocationType.TEMPLE,
             name: `${location.name} Temple`,
             description: `A sacred temple dedicated to the worship of ${population.dominantBelief}`,
@@ -164,7 +164,7 @@ export class LocationModule {
           }
 
           events.push({
-            id: uuidv4(),
+            id: generateEventId(),
             year: nextYear,
             type: 'social' as any,
             title: `Temple Built at ${location.name}`,

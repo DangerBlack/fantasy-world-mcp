@@ -5,7 +5,7 @@
 
 import { WorldState, Hero, HeroStatus, HeroClass, Quest, QuestStatus, Craft, Population, QuestType, CraftRarity, CraftCategory } from '../../types';
 import { SeededRandom } from '../../utils/random';
-import { v4 as uuidv4 } from 'uuid';
+import { generateEventId, generateHeroId, generateCraftId } from '../../utils/idGenerator';
 
 export class HeroModule {
   private rng: SeededRandom;
@@ -123,7 +123,7 @@ export class HeroModule {
     const name = this.generateHeroName(population.culture, heroClass);
 
     return {
-      id: `hero_${uuidv4()}`,
+      id: generateHeroId(),
       name,
       race: population.race,
       culture: population.culture,
@@ -419,7 +419,7 @@ export class HeroModule {
                    quest.urgency === 'high' ? CraftRarity.UNCOMMON : CraftRarity.COMMON;
 
     const craft: Craft = {
-      id: `craft_${uuidv4()}`,
+      id: generateCraftId(),
       name: bookTitle,
       description: bookDescription,
       category: CraftCategory.BOOK,

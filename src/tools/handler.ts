@@ -6,7 +6,7 @@ import { WorldManager } from '../core/worldManager';
 import { SimulationEngine } from '../simulation/engine';
 import { InitialConditions, SimulationParams, Craft, CraftCategory, CraftRarity, Quest, QuestType, QuestStatus, EventType, WorldState } from '../types';
 import { ExportFormatter } from '../utils/export';
-import { v4 as uuidv4 } from 'uuid';
+import { generateEventId, generatePopulationId, generateCraftId } from '../utils/idGenerator';
 import { HeroModule } from '../simulation/modules/heroes';
 import { SeededRandom } from '../utils/random';
 
@@ -298,7 +298,7 @@ export class ToolHandler {
     behavior?: string;
   }): Promise<{ success: boolean; populationId: string }> {
     const population: any = {
-      id: `pop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: generatePopulationId(),
       name: args.name,
       size: args.size,
       race: args.race,
@@ -344,7 +344,7 @@ export class ToolHandler {
     }
 
     const craft: Craft = {
-      id: `craft_${uuidv4()}`,
+      id: generateCraftId(),
       name: args.name,
       description: args.description,
       category: args.category as CraftCategory,
@@ -383,7 +383,7 @@ export class ToolHandler {
 
     // Create event for craft creation
     const event = {
-      id: uuidv4(),
+      id: generateEventId(),
       year: world.timestamp,
       type: 'craft_creation' as any,
       title: `Creation of ${args.name}`,
@@ -440,7 +440,7 @@ export class ToolHandler {
     // Process hero deaths - create HERO_DEATH events
     for (const hero of heroResult.deaths) {
       const event = {
-        id: uuidv4(),
+        id: generateEventId(),
         year: world.timestamp,
         type: EventType.HERO_DEATH,
         title: `${hero.name} Falls`,
@@ -473,7 +473,7 @@ export class ToolHandler {
 
       // Create commemoration event
       const event = {
-        id: uuidv4(),
+        id: generateEventId(),
         year: world.timestamp,
         type: EventType.COMMEMORATION_CREATED,
         title: `${commemoration.name}`,
@@ -497,10 +497,10 @@ export class ToolHandler {
       // Check for new achievements
       const quest = world.quests.find(q => q.assignedHeroes?.includes(hero.id));
       if (quest && quest.status === QuestStatus.COMPLETED) {
-        const event = {
-          id: uuidv4(),
-          year: world.timestamp,
-          type: EventType.HERO_ACHIEVEMENT,
+      const event = {
+        id: generateEventId(),
+        year: world.timestamp,
+        type: EventType.HERO_ACHIEVEMENT,
           title: `${hero.name} Achieves: ${quest.title}`,
           description: `${hero.name} has completed the quest "${quest.title}"`,
           causes: [],
@@ -521,7 +521,7 @@ export class ToolHandler {
     // Create quest completion event
     const eventType = args.success ? EventType.QUEST_COMPLETED : EventType.QUEST_FAILED;
     const event = {
-      id: uuidv4(),
+      id: generateEventId(),
       year: world.timestamp,
       type: eventType,
       title: args.success ? `Quest Completed: ${quest.title}` : `Quest Failed: ${quest.title}`,
@@ -593,7 +593,7 @@ export class ToolHandler {
 
     // Create event
     const event = {
-      id: uuidv4(),
+      id: generateEventId(),
       year: world.timestamp,
       type: EventType.QUEST_GENERATED,
       title: `Hero Assigned: ${hero.name} to ${quest.title}`,

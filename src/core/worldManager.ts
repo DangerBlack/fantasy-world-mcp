@@ -2,7 +2,7 @@
  * Core world state management
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { generateWorldId, generatePopulationId, generateLocationId, generateEventId, generateBeliefId } from '../utils/idGenerator';
 import { SeededRandom } from '../utils/random';
 import {
   WorldState,
@@ -58,7 +58,7 @@ export class WorldManager {
   }
 
   async createWorld(conditions: InitialConditions): Promise<WorldState> {
-    const worldId = uuidv4();
+    const worldId = generateWorldId();
     const seed = this.rng.next().toString(36);
 
     const initialGeography: GeographyLayer = {
@@ -75,7 +75,7 @@ export class WorldManager {
       : [conditions.population];
 
     const initialPopulations: Population[] = populationsArray.map((pop, index) => ({
-      id: uuidv4(),
+      id: generatePopulationId(),
       name: pop.name,
       race: pop.race || 'human',
       size: pop.size,
@@ -94,7 +94,7 @@ export class WorldManager {
     if (populationsArray.length === 1) {
       // Single population - shared location
       const initialLocation: Location = {
-        id: uuidv4(),
+        id: generateLocationId(),
         type: conditions.locationType,
         name: this.generateLocationName(conditions.locationType, conditions.region),
         description: conditions.event,
@@ -111,7 +111,7 @@ export class WorldManager {
       // Multiple populations - each gets their own starting location near the main event
       populationsArray.forEach((pop, index) => {
         const location: Location = {
-          id: uuidv4(),
+          id: generateLocationId(),
           type: index === 0 ? conditions.locationType : conditions.locationType,
           name: this.generateLocationName(conditions.locationType, conditions.region, pop.race),
           description: `${pop.name} settle near ${conditions.event}`,
@@ -130,7 +130,7 @@ export class WorldManager {
     // Create initial events for each population
     const initialEvents: Event[] = [
       {
-        id: uuidv4(),
+        id: generateEventId(),
         year: 0,
         type: EventType.NATURAL,
         title: 'Beginning',
@@ -196,7 +196,7 @@ export class WorldManager {
         const behavior = this.rng.pick(monsterBehaviors);
 
         const monster: Population = {
-          id: uuidv4(),
+          id: generatePopulationId(),
           name: monsterNames[monsterType],
           race: 'monster',
           size: 10 + this.rng.nextInt(0, 20),
@@ -334,7 +334,7 @@ export class WorldManager {
                       this.rng.pick(['good', 'neutral', 'lawful'] as const);
     
     const belief: Belief = {
-      id: `belief_${uuidv4()}`,
+      id: generateBeliefId(),
       type: beliefType,
       name,
       deityName: beliefType === BeliefType.MONOTHEISM ? this.rng.pick(['Thorin', 'Aelindra', 'Gorm', 'Sylvara']) : undefined,
@@ -366,7 +366,7 @@ export class WorldManager {
 
   private createTempleLocation(world: WorldState, belief: Belief, population: Population, year: number): Location {
     const location: Location = {
-      id: uuidv4(),
+      id: generateLocationId(),
       type: LocationType.TEMPLE,
       name: `${belief.name.split(' ')[0]} ${this.rng.pick(['Temple', 'Sanctuary', 'Shrine', 'Keep'])}`,
       description: `A sacred ${belief.type} dedicated to ${belief.domains[0]}`,
@@ -384,7 +384,7 @@ export class WorldManager {
     
     // Add temple event
     const event: Event = {
-      id: uuidv4(),
+      id: generateEventId(),
       year,
       type: EventType.TEMPLE_BUILT,
       title: `${location.name} Constructed`,

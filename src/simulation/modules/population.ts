@@ -6,6 +6,7 @@
 import { Event, Population, Resource } from '../../types';
 import { WorldState } from '../../types';
 import { SeededRandom } from '../../utils/random';
+import { generateEventId } from '../../utils/idGenerator';
 
 export class PopulationModule {
   private rng: SeededRandom;
@@ -58,7 +59,7 @@ export class PopulationModule {
           : `${population.name} population declined by ${Math.abs(change)} people${foodAvailability <= 0 ? ' due to starvation' : ''}`;
         
         events.push({
-          id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: generateEventId(),
           year: nextYear,
           type: eventType as any,
           title,
@@ -108,7 +109,7 @@ export class PopulationModule {
       population.organization = newOrg;
 
       events.push({
-        id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: generateEventId(),
         year: nextYear,
         type: 'social' as any,
         title: `${population.name} becomes ${newOrg}`,

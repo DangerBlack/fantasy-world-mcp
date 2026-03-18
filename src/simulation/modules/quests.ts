@@ -6,7 +6,7 @@
 import { Event, Population, MonsterPopulation, Quest, QuestType, QuestStatus, Resource } from '../../types';
 import { WorldState } from '../../types';
 import { SeededRandom } from '../../utils/random';
-import { v4 as uuidv4 } from 'uuid';
+import { generateEventId, generateQuestId } from '../../utils/idGenerator';
 
 export class QuestModule {
   private rng: SeededRandom;
@@ -52,7 +52,7 @@ export class QuestModule {
           world.society.quests.push(quest.id);
 
           events.push({
-            id: uuidv4(),
+            id: generateEventId(),
             year: nextYear,
             type: 'quest_generation' as any,
             title: `New Quest: ${quest.title}`,
@@ -128,7 +128,7 @@ export class QuestModule {
     const requiredHeroes = monster.dangerLevel >= 8 ? 5 : monster.dangerLevel >= 6 ? 3 : 1;
     
     return {
-      id: `quest_${uuidv4()}`,
+      id: generateQuestId(),
       title: `Eliminate the ${monster.monsterSubtype || monster.name}`,
       description: `The ${monster.monsterSubtype} ${monster.name} (Danger: ${monster.dangerLevel}/10) has been raiding ${population.name}'s settlements. Their lair must be found and destroyed before more lives are lost.`,
       type: QuestType.MONSTER_HUNT,
@@ -154,7 +154,7 @@ export class QuestModule {
     const disease = this.rng.pick(diseases);
     
     return {
-      id: `quest_${uuidv4()}`,
+      id: generateQuestId(),
       title: `Cure ${disease}`,
       description: `A terrible plague called ${disease} is sweeping through ${population.name}'s lands. Physicians are powerless. Heroes must find a cure in ancient texts, distant lands, or from mysterious healers.`,
       type: QuestType.DISEASE_CURE,
@@ -199,7 +199,7 @@ export class QuestModule {
     const scenario = this.rng.pick(famineScenarios);
     
     return {
-      id: `quest_${uuidv4()}`,
+      id: generateQuestId(),
       title: scenario.title,
       description: scenario.description,
       type: QuestType.SURVIVAL,
@@ -298,7 +298,7 @@ export class QuestModule {
     const urgency = data.resources.food <= 0 ? 'critical' : 'high';
     
     return {
-      id: `quest_${uuidv4()}`,
+      id: generateQuestId(),
       title: `Secure Food from ${terrainFeature.charAt(0).toUpperCase() + terrainFeature.slice(1)}`,
       description: `${data.population} faces ${data.resources.food <= 0 ? 'starvation' : 'severe hunger'}. The ${data.culture} must send heroes to ${terrainFeature} to ${data.terrain === 'coastal' ? 'establish fishing grounds' : data.terrain === 'forest' ? 'hunt and forage' : 'find edible resources'}. Time is running out.`,
       type: QuestType.SURVIVAL,
@@ -320,7 +320,7 @@ export class QuestModule {
       const threat = data.monsters.find((m: any) => m.dangerLevel > 5);
       if (threat) {
         return {
-          id: `quest_${uuidv4()}`,
+          id: generateQuestId(),
           title: `Stop the ${threat.name}`,
           description: `The ${threat.name} (Danger: ${threat.dangerLevel}/10) has been ${threat.behavior === 'aggressive' ? 'raiding' : 'terrorizing'} ${data.population}. Their ${data.terrain} lair must be destroyed before more lives are lost.`,
           type: QuestType.MONSTER_HUNT,
@@ -340,7 +340,7 @@ export class QuestModule {
 
     if (data.resources.iron < 20) {
       return {
-        id: `quest_${uuidv4()}`,
+        id: generateQuestId(),
         title: 'Find New Iron Mines',
         description: `${data.population}'s iron reserves are depleted. Without iron, their ${data.technologies.join(', ')} will fail. Heroes must explore the ${data.terrain} to find new deposits or ancient caches.`,
         type: QuestType.RESOURCE_RECOVERY,
@@ -360,7 +360,7 @@ export class QuestModule {
     if (data.conflicts && data.conflicts.length > 0) {
       const conflict = data.conflicts[0];
       return {
-        id: `quest_${uuidv4()}`,
+        id: generateQuestId(),
         title: 'End the Growing Conflict',
         description: `${data.population} is at odds with another group over ${conflict.cause}. Heroes must negotiate peace or resolve the dispute before war erupts.`,
         type: QuestType.RECONCILIATION,
@@ -411,7 +411,7 @@ export class QuestModule {
     };
     
     return {
-      id: `quest_${uuidv4()}`,
+      id: generateQuestId(),
       title: `Secure new ${resourceNames[resource]} sources`,
       description: `${population.name}'s ${resource} reserves are critically depleted. Expeditions must venture into dangerous territories to find new sources or ancient caches.`,
       type: QuestType.RESOURCE_RECOVERY,

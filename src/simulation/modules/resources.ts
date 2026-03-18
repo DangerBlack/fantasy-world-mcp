@@ -6,6 +6,7 @@
 import { Event, Resource, Population, WorldState, EventType, CraftRarity } from '../../types';
 import { WorldState as WorldStateType } from '../../types';
 import { SeededRandom } from '../../utils/random';
+import { generateEventId } from '../../utils/idGenerator';
 
 export class ResourceModule {
   private rng: SeededRandom;
@@ -82,7 +83,7 @@ export class ResourceModule {
       const amount = world.geography.resources[resource] || 0;
       if (amount <= 5 && amount > 0) {
         events.push({
-          id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: generateEventId(),
           year: nextYear,
           type: 'resource_depletion' as any,
           title: `${resource} Critically Low`,
@@ -100,7 +101,7 @@ export class ResourceModule {
         });
       } else if (amount <= 0) {
         events.push({
-          id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: generateEventId(),
           year: nextYear,
           type: 'resource_depletion' as any,
           title: `${resource} Depleted`,
@@ -188,7 +189,7 @@ export class ResourceModule {
               
               // Create TECH_MILESTONE event
               events.push({
-                id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                id: generateEventId(),
                 year: nextYear,
                 type: EventType.TECH_MILESTONE,
                 title: `Tech Level ${newTechLevel}: ${newTech}`,
@@ -206,7 +207,7 @@ export class ResourceModule {
             }
 
             events.push({
-              id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              id: generateEventId(),
               year: nextYear,
               type: 'technological_progress' as any,
               title: `Discovery: ${newTech}`,

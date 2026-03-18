@@ -6,7 +6,7 @@
 import { Event, Population, Craft, CraftCategory, CraftRarity, Resource, DeityDomain } from '../../types';
 import { WorldState } from '../../types';
 import { SeededRandom } from '../../utils/random';
-import { v4 as uuidv4 } from 'uuid';
+import { generateEventId, generateCraftId } from '../../utils/idGenerator';
 
 export class CraftModule {
   private rng: SeededRandom;
@@ -45,7 +45,7 @@ export class CraftModule {
           population.crafts.push(craft.id);
 
           events.push({
-            id: uuidv4(),
+            id: generateEventId(),
             year: nextYear,
             type: 'craft_creation' as any,
             title: craft.name,
@@ -73,7 +73,7 @@ export class CraftModule {
         world.society.crafts.push(discovery.id);
 
         events.push({
-          id: uuidv4(),
+          id: generateEventId(),
           year: nextYear,
           type: 'craft_discovery' as any,
           title: `Discovery: ${discovery.name}`,
@@ -100,7 +100,7 @@ export class CraftModule {
         lostCraft.location = undefined;
 
         events.push({
-          id: uuidv4(),
+          id: generateEventId(),
           year: nextYear,
           type: 'craft_lost' as any,
           title: `${lostCraft.name} Lost`,
@@ -304,7 +304,7 @@ export class CraftModule {
     }
 
     return {
-      id: `craft_${uuidv4()}`,
+      id: generateCraftId(),
       name,
       description,
       category,
@@ -345,7 +345,7 @@ export class CraftModule {
     const description = `${this.rng.pick(descriptions)}. Recently discovered in ${world.geography.terrain} ruins.`;
 
     return {
-      id: `craft_${uuidv4()}`,
+      id: generateCraftId(),
       name,
       description,
       category,
@@ -417,7 +417,7 @@ export class CraftModule {
       : ['Blessed item'];
     
     return {
-      id: `craft_${uuidv4()}`,
+      id: generateCraftId(),
       name: String(name),
       description: String(description),
       category,

@@ -6,7 +6,7 @@
 import { Event, MonsterPopulation, MonsterType, Location, Population, Quest, QuestType, QuestStatus, LocationType } from '../../types';
 import { WorldState } from '../../types';
 import { SeededRandom } from '../../utils/random';
-import { v4 as uuidv4 } from 'uuid';
+import { generateEventId, generateMonsterId, generateQuestId } from '../../utils/idGenerator';
 
 export class MonsterModule {
   private rng: SeededRandom;
@@ -30,7 +30,7 @@ export class MonsterModule {
         if (this.rng.boolean(0.05)) {
           monster.isDormant = false;
           events.push({
-            id: uuidv4(),
+            id: generateEventId(),
             year: nextYear,
             type: 'monster_dormancy' as any,
             title: `${monster.monsterSubtype || monster.name} Awakens`,
@@ -57,7 +57,7 @@ export class MonsterModule {
       if (change > 0) {
         monster.size += change;
         events.push({
-          id: uuidv4(),
+          id: generateEventId(),
           year: nextYear,
           type: 'monster_infestation' as any,
           title: `${monster.name} Population Grows`,
@@ -135,7 +135,7 @@ export class MonsterModule {
               }
 
               events.push({
-                id: uuidv4(),
+                id: generateEventId(),
                 year: nextYear,
                 type: 'conflict' as any,
                 title: `${target.name} Extinct!`,
@@ -162,7 +162,7 @@ export class MonsterModule {
               // Generate quest for revenge/reconstruction
               if (world.society.populations.some(p => p.race !== 'monster')) {
                 const quest: any = {
-                  id: `quest_${uuidv4()}`,
+                  id: generateQuestId(),
                   title: `Avenge ${target.name}`,
                   description: `${target.name} has been exterminated by ${monster.name}. Their ruins stand as a testament to the threat. Heroes must either slay the monster or rebuild what was lost.`,
                   type: QuestType.MONSTER_HUNT,
@@ -192,7 +192,7 @@ export class MonsterModule {
           monster.relations[target.id] = 'hostile';
 
           events.push({
-            id: uuidv4(),
+            id: generateEventId(),
             year: nextYear,
             type: 'monster_raid' as any,
             title: `${monster.monsterSubtype || 'Monster'} Raid`,
@@ -237,7 +237,7 @@ export class MonsterModule {
             monster.size = Math.max(0, monster.size - monsterDamage);
 
             events.push({
-              id: uuidv4(),
+              id: generateEventId(),
               year: nextYear,
               type: 'conflict' as any,
               title: `${target.name} Counter-attacks`,
@@ -265,7 +265,7 @@ export class MonsterModule {
                 world.society.populations.splice(monsterIndex, 1);
                 
                 events.push({
-                  id: uuidv4(),
+                  id: generateEventId(),
                   year: nextYear,
                   type: 'monster_invasion' as any,
                   title: `${monster.name} Defeated!`,
@@ -306,7 +306,7 @@ export class MonsterModule {
             raidLocation.dangerLevel = monster.dangerLevel;
             
             events.push({
-              id: uuidv4(),
+              id: generateEventId(),
               year: nextYear,
               type: 'monster_invasion' as any,
               title: `${raidLocation.name} Overrun`,

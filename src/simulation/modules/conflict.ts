@@ -7,7 +7,7 @@ import { Event, Population, Location, LocationType } from '../../types';
 import { WorldState } from '../../types';
 import { Resource } from '../../types';
 import { SeededRandom } from '../../utils/random';
-import { v4 as uuidv4 } from 'uuid';
+import { generateEventId, generatePopulationId, generateLocationId } from '../../utils/idGenerator';
 
 export class ConflictModule {
   private rng: SeededRandom;
@@ -36,7 +36,7 @@ export class ConflictModule {
         });
 
         events.push({
-          id: uuidv4(),
+          id: generateEventId(),
           year: nextYear,
           type: 'conflict' as any,
           title: 'Resource Conflict',
@@ -73,7 +73,7 @@ export class ConflictModule {
           population.size = remainingSize;
           
           const newLocation: Location = {
-            id: uuidv4(),
+            id: generateLocationId(),
             type: LocationType.SETTLEMENT,
             name: generateName(),
             description: 'A new settlement established by migrating group',
@@ -89,7 +89,7 @@ export class ConflictModule {
           // Create new population for migrants
           const migrantPopulation: any = {
             ...population,
-            id: `pop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: generatePopulationId(),
             name: `${population.name} Colonists`,
             size: migrationSize,
           };
@@ -98,7 +98,7 @@ export class ConflictModule {
           world.locations.push(newLocation);
 
           events.push({
-            id: uuidv4(),
+            id: generateEventId(),
             year: nextYear,
             type: 'migration' as any,
             title: 'Migration',

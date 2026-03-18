@@ -20,7 +20,7 @@ import {
   ConflictModule,
   HeroModule,
 } from './modules';
-import { v4 as uuidv4 } from 'uuid';
+import { generateEventId, generatePopulationId } from '../utils/idGenerator';
 
 export class SimulationEngine {
   private worldManager: WorldManager;
@@ -126,7 +126,7 @@ export class SimulationEngine {
 
         // Create quest failed event
         const event: Event = {
-          id: uuidv4(),
+          id: generateEventId(),
           year: currentYear,
           type: EventType.QUEST_FAILED,
           title: `Quest Failed: ${quest.title}`,
@@ -148,7 +148,7 @@ export class SimulationEngine {
         // Process hero deaths from failed quest
         for (const hero of heroResult.deaths) {
           const deathEvent: Event = {
-            id: uuidv4(),
+            id: generateEventId(),
             year: currentYear,
             type: EventType.HERO_DEATH,
             title: `${hero.name} Falls`,
@@ -178,7 +178,7 @@ export class SimulationEngine {
           }
 
           const commEvent: Event = {
-            id: uuidv4(),
+            id: generateEventId(),
             year: currentYear,
             type: EventType.COMMEMORATION_CREATED,
             title: `${commemoration.name}`,
@@ -299,7 +299,7 @@ export class SimulationEngine {
     const heroResult = this.heroModule.checkHeroSpawning(world, nextYear);
     for (const hero of heroResult.spawned) {
       events.push({
-        id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: generateEventId(),
         year: nextYear,
         type: 'hero_spawned' as any,
         title: `Hero Born: ${hero.name}`,
@@ -344,7 +344,7 @@ export class SimulationEngine {
       const event = this.rng.pick(eventTypes);
       
       events.push({
-        id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: generateEventId(),
         year: nextYear,
         type: event.type as any,
         title: event.title,
