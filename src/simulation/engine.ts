@@ -8,6 +8,7 @@
 import { WorldState, Event, SimulationParams, Change, Resource, EventType, QuestStatus } from '../types';
 import { WorldManager } from '../core/worldManager';
 import { SeededRandom } from '../utils/random';
+import { EventDeduplicator } from './utils/eventDeduplicator';
 import {
   PopulationModule,
   MonsterModule,
@@ -24,6 +25,7 @@ import { v4 as uuidv4 } from 'uuid';
 export class SimulationEngine {
   private worldManager: WorldManager;
   private rng: SeededRandom;
+  private eventDeduplicator: EventDeduplicator;
   
   // Modular simulation components
   private populationModule: PopulationModule;
@@ -39,6 +41,7 @@ export class SimulationEngine {
   constructor(worldManager: WorldManager, seed: string) {
     this.worldManager = worldManager;
     this.rng = new SeededRandom(seed);
+    this.eventDeduplicator = new EventDeduplicator(0.8);
     
     // Initialize modules
     this.populationModule = new PopulationModule(this.rng);
@@ -70,8 +73,11 @@ export class SimulationEngine {
       // Evaluate all active rules using modules
       const newEvents = this.evaluateRules(world, currentYear, nextYear, params);
       
+      // Deduplicate events to reduce noise and improve narrative quality
+      const deduplicatedEvents = this.deduplicateEvents(newEvents);
+      
       // Apply event effects
-      for (const event of newEvents) {
+      for (const event of deduplicatedEvents) {
         this.applyEventEffects(world, event);
         world.events.push(event);
         world.timeline.events.push(event);
@@ -360,6 +366,38 @@ export class SimulationEngine {
         }
       }
     }
+  }
+
+  /**
+   * Deduplicate an array of events to reduce noise and improve narrative quality
+   * 
+   * This method uses the EventDeduplicator to:
+   * - Remove exact duplicates (same year, type, location, target, title)
+   * - Merge similar events (80% similarity threshold)
+   * - Combine descriptions and effects of merged events
+   * 
+   * @param events - Array of events to deduplicate
+   * @returns Deduplicated/merged array of events
+   */
+  private deduplicateEvents(events: Event[]): Event[] {
+    return this.eventDeduplicator.deduplicateEvents(events);
+  }
+
+  /**
+   * Create a signature for an event used in deduplication
+   * 
+   * The signature includes key attributes that define event identity:
+   * - Year of the event
+   * - Event type
+   * - Location (if present)
+   * - Target population (extracted from description/impact)
+   * - Title
+   * 
+   * @param event - The event to create a signature for
+   * @returns Event signature object
+   */
+  private createEventSignature(event: Event): any {
+    return this.eventDeduplicator.createEventSignature(event);
   }
 
   private updateEras(world: WorldState, params: SimulationParams): void {
