@@ -77,14 +77,16 @@ export class HeroModule {
     quest: Quest, 
     year: number
   ): boolean {
-    // Tech level requirement
-    const minTechLevel = quest.urgency === 'critical' ? 2 : quest.urgency === 'high' ? 3 : 4;
+    // Tech level requirement - lowered to allow heroes in earlier eras
+    // Critical: tech 1+, High: tech 2+, Medium: tech 3+, Low: tech 4+
+    const minTechLevel = quest.urgency === 'critical' ? 1 : quest.urgency === 'high' ? 2 : quest.urgency === 'medium' ? 3 : 4;
     if (population.technologyLevel < minTechLevel) {
       return false;
     }
 
-    // Population size requirement
-    const minPopulation = quest.urgency === 'critical' ? 50 : quest.urgency === 'high' ? 100 : 200;
+    // Population size requirement - lowered to allow smaller groups to call heroes
+    // Critical: 20+, High: 50+, Medium: 100+, Low: 150+
+    const minPopulation = quest.urgency === 'critical' ? 20 : quest.urgency === 'high' ? 50 : quest.urgency === 'medium' ? 100 : 150;
     if (population.size < minPopulation) {
       return false;
     }
