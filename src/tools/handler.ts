@@ -20,7 +20,8 @@ export class ToolHandler {
     this.worldManager = new WorldManager(seed);
     this.simulationEngine = new SimulationEngine(this.worldManager, seed);
     this.exportFormatter = new ExportFormatter();
-    this.heroModule = new HeroModule(new SeededRandom(seed));
+    // Use the hero module from simulation engine to ensure shared RNG for deterministic behavior
+    this.heroModule = this.simulationEngine.getHeroModule();
   }
 
   async initializeWorld(args: {

@@ -43,7 +43,7 @@ export class SimulationEngine {
     this.rng = new SeededRandom(seed);
     this.eventDeduplicator = new EventDeduplicator(0.8);
     
-    // Initialize modules
+    // Initialize modules with shared RNG for deterministic behavior
     this.populationModule = new PopulationModule(this.rng);
     this.monsterModule = new MonsterModule(this.rng);
     this.locationModule = new LocationModule(this.rng);
@@ -53,6 +53,14 @@ export class SimulationEngine {
     this.resourceModule = new ResourceModule(this.rng);
     this.conflictModule = new ConflictModule(this.rng);
     this.heroModule = new HeroModule(this.rng);
+  }
+
+  /**
+   * Get the hero module for external tool handlers
+   * Ensures all hero operations use the same RNG instance for determinism
+   */
+  public getHeroModule(): HeroModule {
+    return this.heroModule;
   }
 
   simulate(worldId: string, params: SimulationParams): WorldState {
