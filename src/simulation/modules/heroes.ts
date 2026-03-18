@@ -91,10 +91,23 @@ export class HeroModule {
       return false;
     }
 
-    // Urgency-based spawn chance
-    const spawnChance = quest.urgency === 'critical' ? 0.8 : 
-                        quest.urgency === 'high' ? 0.5 : 
-                        quest.urgency === 'medium' ? 0.3 : 0.1;
+    // Calculate spawn chance based on quest age and urgency
+    // Base chance starts low and increases over time, asymptotically approaching max
+    const baseChance = quest.urgency === 'critical' ? 0.8 : 
+                       quest.urgency === 'high' ? 0.5 : 
+                       quest.urgency === 'medium' ? 0.3 : 0.1;
+    
+    // Calculate quest age in years
+    const questAge = year - quest.createdAt;
+    
+    // Increasing factor: starts at 5% for first 10 years, 10% for second 10 years, etc.
+    // Formula: additionalChance = min(0.05 * (questAge / 10), 0.55)
+    // This gives: 5% at 10y, 10% at 20y, 15% at 30y, ... up to 55% max
+    const additionalChance = Math.min(0.05 * (questAge / 10), 0.55);
+    
+    // Total chance = base + additional, capped at 60% for non-critical, 95% for critical
+    const maxChance = quest.urgency === 'critical' ? 0.95 : 0.60;
+    const spawnChance = Math.min(baseChance + additionalChance, maxChance);
     
     return this.rng.boolean(spawnChance);
   }

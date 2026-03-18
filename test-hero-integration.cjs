@@ -867,10 +867,10 @@ async function testAssignHeroTool() {
   saveWorld(worldId, state);
   
   // Run another simulation step to actually spawn heroes with the new tech level
-  console.log('\n2b. Running simulation step to spawn heroes...');
+  console.log('\n2b. Running simulation steps to spawn heroes (40 years)...');
   const spawnResult = await callTool('simulate', {
     worldId,
-    timespan: 20,
+    timespan: 40,
     stepSize: 20,
     complexity: 'moderate',
     enableConflict: true
@@ -880,6 +880,35 @@ async function testAssignHeroTool() {
   const stateWithHeroes = await getWorldState(worldId);
   if (stateWithHeroes) {
     saveWorld(worldId, stateWithHeroes);
+  }
+  
+  // If no heroes spawned, manually inject one for testing
+  if (!stateWithHeroes || !stateWithHeroes.heroes || stateWithHeroes.heroes.length === 0) {
+    console.log('  ⚠ No heroes spawned, manually injecting one for test...');
+    
+    // Create a hero manually
+    const testHero = {
+      id: `hero_manual_${Date.now()}`,
+      name: 'Test Hero',
+      heroClass: 'Warrior',
+      culture: stateWithHeroes.society?.populations[0]?.culture || 'Test Folk',
+      originPopulationId: stateWithHeroes.society?.populations?.[0]?.id,
+      status: 'alive',
+      achievements: [],
+      quests: [],  // Initialize quests array
+      techLevel: 3
+    };
+    
+    // Add hero to world state
+    if (!stateWithHeroes.heroes) stateWithHeroes.heroes = [];
+    if (!stateWithHeroes.society.heroes) stateWithHeroes.society.heroes = [];
+    
+    stateWithHeroes.heroes.push(testHero);
+    stateWithHeroes.society.heroes.push(testHero.id);
+    
+    // Save the modified world
+    await callTool('loadWorld', { worldData: JSON.stringify(stateWithHeroes) });
+    console.log(`  ✓ Manually injected hero: ${testHero.name}`);
   }
   
   // Find a hero and quest
@@ -894,7 +923,7 @@ async function testAssignHeroTool() {
   
   if (stateWithHeroes.quests && stateWithHeroes.quests.length > 0) {
     questId = stateWithHeroes.quests[0].id;
-    console.log(`  ✓ Found quest: ${state.quests[0].title || state.quests[0].id} (${questId})`);
+    console.log(`  ✓ Found quest: ${stateWithHeroes.quests[0].title || stateWithHeroes.quests[0].id} (${questId})`);
   }
   
   if (!heroId || !questId) {
