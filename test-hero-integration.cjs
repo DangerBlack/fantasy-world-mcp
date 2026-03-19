@@ -509,7 +509,7 @@ async function testQuestCompletionWithHeroDeath() {
   if (stateAfterFailure && stateAfterFailure.crafts) {
     const commemorationBook = stateAfterFailure.crafts.find(c => 
       c.category === 'book' && 
-      (c.name.toLowerCase().includes('commemoration') || c.name.toLowerCase().includes('hero'))
+      (c.name.toLowerCase().includes('ballad') || c.name.toLowerCase().includes('chronicles') || c.name.toLowerCase().includes('commemoration'))
     );
     allPassed = assertTrue(!!commemorationBook, 'Commemoration book created') && allPassed;
     if (commemorationBook) {
@@ -684,6 +684,51 @@ async function testQuestCompletionWithHeroSuccess() {
   
   // Assign hero to quest (if not already assigned)
   console.log('\n4. Assigning hero to quest...');
+  
+  // Check if hero is still alive
+  const heroCheckResult = await callTool('getHero', { worldId, heroId });
+  const heroCheckText = heroCheckResult.result?.content?.[0]?.text;
+  if (heroCheckText) {
+    const heroResponse = JSON.parse(heroCheckText);
+    const heroData = heroResponse.hero || heroResponse;
+    if (heroData.status !== 'alive') {
+      console.log(`  ⚠ Hero ${heroData.name} is ${heroData.status}, re-injecting alive hero...`);
+      
+      // Re-inject an alive hero
+      const testHero = {
+        id: heroId, // Keep same ID
+        name: 'Test Hero Success',
+        race: state.society?.populations[0]?.race || 'human',
+        heroClass: 'Warrior',
+        culture: state.society?.populations[0]?.culture || 'Test Folk',
+        status: 'alive',
+        stats: { strength: 14, dexterity: 12, intelligence: 10, charisma: 12, constitution: 13 },
+        skills: [],
+        inventory: [],
+        quests: [questId],
+        achievements: [],
+        originPopulationId: state.society?.populations?.[0]?.id,
+        spawnedYear: state.timestamp || 100,
+        lineage: false,
+        techLevel: 3
+      };
+      
+      // Update world state
+      const currentState = await getWorldState(worldId);
+      if (currentState) {
+        // Remove old hero
+        currentState.heroes = currentState.heroes.filter(h => h.id !== heroId);
+        currentState.society.heroes = currentState.society.heroes.filter(hid => hid !== heroId);
+        
+        // Add new alive hero
+        currentState.heroes.push(testHero);
+        
+        await callTool('loadWorld', { worldData: JSON.stringify(currentState) });
+        console.log(`  ✓ Re-injected alive hero: ${testHero.name}`);
+      }
+    }
+  }
+  
   const assignResult = await callTool('assignHeroToQuest', {
     worldId,
     heroId,

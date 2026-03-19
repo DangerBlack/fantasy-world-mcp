@@ -7,6 +7,7 @@ import { Event, Resource, Population, WorldState, EventType, CraftRarity } from 
 import { WorldState as WorldStateType } from '../../types';
 import { SeededRandom } from '../../utils/random';
 import { generateEventId } from '../../utils/idGenerator';
+import { isMonstrous } from '../../utils/raceTraits';
 
 export class ResourceModule {
   private rng: SeededRandom;
@@ -126,7 +127,7 @@ export class ResourceModule {
     const events: Event[] = [];
 
     for (const population of world.society.populations) {
-      if (population.race === 'monster') continue;
+      if (isMonstrous(population)) continue;
 
       // NEW TECH PROGRESSION FORMULA
       // Base chance: 5%

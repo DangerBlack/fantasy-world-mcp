@@ -7,6 +7,7 @@ import { Event, MonsterPopulation, MonsterType, Location, Population, Quest, Que
 import { WorldState } from '../../types';
 import { SeededRandom } from '../../utils/random';
 import { generateEventId, generateMonsterId, generateQuestId } from '../../utils/idGenerator';
+import { isMonstrous } from '../../utils/raceTraits';
 
 export class MonsterModule {
   private rng: SeededRandom;
@@ -19,7 +20,7 @@ export class MonsterModule {
     const events: Event[] = [];
     
     // Get all monster populations
-    const monsters = world.society.populations.filter(p => p.race === 'monster') as MonsterPopulation[];
+    const monsters = world.society.populations.filter(p => isMonstrous(p)) as MonsterPopulation[];
     
     if (monsters.length === 0) return events;
 
@@ -78,7 +79,7 @@ export class MonsterModule {
 
       // Raid settlements
       if (this.rng.boolean(monster.raidFrequency || 0.3)) {
-        const civilizedPops = world.society.populations.filter(p => p.race !== 'monster');
+        const civilizedPops = world.society.populations.filter(p => !isMonstrous(p));
         if (civilizedPops.length > 0) {
           const target = this.rng.pick(civilizedPops);
           
@@ -160,7 +161,7 @@ export class MonsterModule {
               });
 
               // Generate quest for revenge/reconstruction
-              if (world.society.populations.some(p => p.race !== 'monster')) {
+              if (world.society.populations.some(p => !isMonstrous(p))) {
                 const quest: any = {
                   id: generateQuestId(),
                   title: `Avenge ${target.name}`,

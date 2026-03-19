@@ -8,6 +8,7 @@ import { WorldState } from '../../types';
 import { Resource } from '../../types';
 import { SeededRandom } from '../../utils/random';
 import { generateEventId, generatePopulationId, generateLocationId } from '../../utils/idGenerator';
+import { isMonstrous } from '../../utils/raceTraits';
 
 export class ConflictModule {
   private rng: SeededRandom;
@@ -130,7 +131,7 @@ export class ConflictModule {
   }
 
   checkReligiousConflict(world: WorldState, year: number): { pop1: Population; pop2: Population; beliefConflict: string } | null {
-    const civilizedPops = world.society.populations.filter(p => p.race !== 'monster' && p.dominantBelief);
+    const civilizedPops = world.society.populations.filter(p => !isMonstrous(p) && p.dominantBelief);
     
     if (civilizedPops.length < 2) return null;
     

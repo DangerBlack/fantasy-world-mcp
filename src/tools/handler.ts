@@ -4,11 +4,12 @@
 
 import { WorldManager } from '../core/worldManager';
 import { SimulationEngine } from '../simulation/engine';
-import { InitialConditions, SimulationParams, Craft, CraftCategory, CraftRarity, Quest, QuestType, QuestStatus, EventType, WorldState } from '../types';
+import { InitialConditions, SimulationParams, Craft, CraftCategory, CraftRarity, Quest, QuestType, QuestStatus, EventType, WorldState, PopulationTraits } from '../types';
 import { ExportFormatter } from '../utils/export';
 import { generateEventId, generatePopulationId, generateCraftId } from '../utils/idGenerator';
 import { HeroModule } from '../simulation/modules/heroes';
 import { SeededRandom } from '../utils/random';
+import { getRaceTraits, isMonstrous } from '../utils/raceTraits';
 
 export class ToolHandler {
   private worldManager: WorldManager;
@@ -296,25 +297,30 @@ export class ToolHandler {
     monsterType?: string;
     dangerLevel?: number;
     behavior?: string;
+    traits?: Partial<PopulationTraits>;
   }): Promise<{ success: boolean; populationId: string }> {
+    const traits = getRaceTraits(args.race, args.traits);
+    
     const population: any = {
       id: generatePopulationId(),
       name: args.name,
       size: args.size,
       race: args.race,
       culture: args.culture,
-      technologyLevel: args.race === 'monster' ? 0 : 2,
+      traits: args.traits, // Store custom traits
+      technologyLevel: traits.baseTechLevel,
       organization: args.organization as any,
       beliefs: [],
       relations: {},
     };
 
-    if (args.race === 'monster') {
+    // Monster-specific fields (for backward compatibility)
+    if (isMonstrous({ race: args.race, traits: args.traits } as any)) {
       population.monsterType = args.monsterType as any;
-      population.dangerLevel = args.dangerLevel || 5;
-      population.behavior = args.behavior as any || 'aggressive';
-      population.raidFrequency = 0.3;
-      population.isDormant = args.behavior === 'dormant';
+      population.dangerLevel = args.dangerLevel || traits.dangerLevelDefault;
+      population.behavior = args.behavior as any || traits.behaviorDefault;
+      population.raidFrequency = traits.raidFrequency;
+      population.isDormant = args.behavior === 'dormant' || traits.behaviorDefault === 'dormant';
     }
 
     const success = await this.worldManager.addPopulation(args.worldId, population);
@@ -504,8 +510,8 @@ export class ToolHandler {
             ? `Completed: ${quest.title}`
             : `Failed: ${quest.title}`;
           
-          // Only create event if hero has this achievement
-          if (hero.achievements && hero.achievements.includes(achievementText)) {
+          // Create event for heroes who have this achievement (added by handleQuestCompletion)
+          if (hero.achievements?.includes(achievementText)) {
             const event = {
               id: generateEventId(),
               year: world.timestamp,

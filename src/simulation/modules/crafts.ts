@@ -7,6 +7,7 @@ import { Event, Population, Craft, CraftCategory, CraftRarity, Resource, DeityDo
 import { WorldState } from '../../types';
 import { SeededRandom } from '../../utils/random';
 import { generateEventId, generateCraftId } from '../../utils/idGenerator';
+import { isMonstrous } from '../../utils/raceTraits';
 
 export class CraftModule {
   private rng: SeededRandom;
@@ -26,7 +27,7 @@ export class CraftModule {
     }
 
     for (const population of world.society.populations) {
-      if (population.race === 'monster') continue;
+      if (isMonstrous(population)) continue;
 
       const techBonus = population.technologyLevel * 0.03;
       const magicResource = world.geography.resources[Resource.MAGIC] || 0;

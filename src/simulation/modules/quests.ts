@@ -7,6 +7,7 @@ import { Event, Population, MonsterPopulation, Quest, QuestType, QuestStatus, Re
 import { WorldState } from '../../types';
 import { SeededRandom } from '../../utils/random';
 import { generateEventId, generateQuestId } from '../../utils/idGenerator';
+import { isMonstrous } from '../../utils/raceTraits';
 
 export class QuestModule {
   private rng: SeededRandom;
@@ -19,13 +20,13 @@ export class QuestModule {
     const events: Event[] = [];
 
     for (const population of world.society.populations) {
-      if (population.race === 'monster') continue;
+      if (isMonstrous(population)) continue;
 
       // Quest generation chance based on world state
       let questChance = 0.05; // Base 5% chance per population per step
 
       // Increase chance if there are monsters
-      const monsters = world.society.populations.filter(p => p.race === 'monster') as MonsterPopulation[];
+      const monsters = world.society.populations.filter(p => isMonstrous(p)) as MonsterPopulation[];
       if (monsters.length > 0) {
         questChance += monsters.length * 0.02;
       }
@@ -75,7 +76,7 @@ export class QuestModule {
   }
 
   private generateAppropriateQuest(world: WorldState, population: Population, year: number): Quest | null {
-    const monsters = world.society.populations.filter(p => p.race === 'monster') as MonsterPopulation[];
+    const monsters = world.society.populations.filter(p => isMonstrous(p)) as MonsterPopulation[];
     
     // Priority 1: Monster threat
     const dangerousMonster = monsters.find(m => m.dangerLevel >= 5 && !m.isDormant);
@@ -253,7 +254,7 @@ export class QuestModule {
         dangerLevel: l.dangerLevel,
       })),
       monsters: world.society.populations
-        .filter(p => p.race === 'monster')
+        .filter(p => isMonstrous(p))
         .map(m => {
           const monster = m as MonsterPopulation;
           return {

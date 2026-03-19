@@ -295,20 +295,55 @@ export interface MonsterPopulation extends Population {
   isDormant: boolean; // Dormant monsters don't act until awakened
 }
 
+/**
+ * Population traits - defines behavioral and mechanical properties
+ * Replaces hardcoded race logic with flexible trait system
+ */
+export interface PopulationTraits {
+  // Core identity
+  isMonstrous: boolean;        // Treated as monster (no crafting/quests/beliefs)
+  canCraft: boolean;           // Can create crafts/items
+  canQuest: boolean;           // Can generate and undertake quests
+  canBelieve: boolean;         // Can have belief systems
+  
+  // Mechanics
+  baseTechLevel: number;       // Starting tech level (0-10)
+  aggression: number;          // 0-1 aggression level (affects conflict)
+  raidFrequency: number;       // 0-1 raid chance (monsters only)
+  populationGrowth: number;    // 0-1 growth rate modifier
+  
+  // Belief system
+  defaultBeliefType: 'pantheon' | 'monotheism' | 'animism' | 'philosophy' | 'cult' | 'folk';
+  preferredDomains: DeityDomain[]; // Preferred deity domains
+  
+  // Social
+  toleranceDefault: 'intolerant' | 'tolerant' | 'pluralistic';
+  organizationDefault: 'nomadic' | 'tribal' | 'feudal' | 'kingdom' | 'empire';
+  
+  // Combat
+  dangerLevelDefault: number;  // Default danger level (1-10, monsters only)
+  behaviorDefault: 'aggressive' | 'territorial' | 'nomadic' | 'dormant' | 'hiding';
+}
+
 export interface Population {
   id: string;
   name: string;
-  race: string; // e.g., 'human', 'dwarf', 'elf', 'dragonborn', 'orc', 'monster'
+  race: string; // Race name/label (e.g., 'human', 'dwarf', 'starforged', 'void-kin')
   size: number;
   culture: string;
-  technologyLevel: number; // 0-10 scale
+  
+  // ✅ NEW: Explicit trait system (optional - will use defaults if not provided)
+  traits?: Partial<PopulationTraits>;
+  
+  technologyLevel: number; // 0-10 scale (deprecated, use traits.baseTechLevel)
   organization: 'nomadic' | 'tribal' | 'feudal' | 'kingdom' | 'empire';
   beliefs: string[]; // Belief IDs
   dominantBelief?: string; // Primary belief system
   religiousTolerance: 'intolerant' | 'tolerant' | 'pluralistic';
   relations: Record<string, 'hostile' | 'neutral' | 'friendly' | 'allied'>;
   crafts: string[]; // IDs of crafts created/owned by this population
-  // Monster-specific fields (optional)
+  
+  // Monster-specific fields (optional - deprecated, use traits)
   monsterType?: MonsterType;
   monsterSubtype?: string;
   dangerLevel?: number;

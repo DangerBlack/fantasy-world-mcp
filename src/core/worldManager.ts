@@ -4,6 +4,7 @@
 
 import { generateWorldId, generatePopulationId, generateLocationId, generateEventId, generateBeliefId } from '../utils/idGenerator';
 import { SeededRandom } from '../utils/random';
+import { getRaceTraits, isMonstrous, getDefaultBeliefType, getPreferredDomains, getDefaultTolerance } from '../utils/raceTraits';
 import {
   WorldState,
   Event,
@@ -74,19 +75,25 @@ export class WorldManager {
       ? conditions.population 
       : [conditions.population];
 
-    const initialPopulations: Population[] = populationsArray.map((pop, index) => ({
-      id: generatePopulationId(),
-      name: pop.name,
-      race: pop.race || 'human',
-      size: pop.size,
-      culture: pop.culture,
-      technologyLevel: 1,
-      organization: pop.organization,
-      beliefs: [],
-      religiousTolerance: 'tolerant',
-      relations: {},
-      crafts: [],
-    }));
+    const initialPopulations: Population[] = populationsArray.map((pop, index) => {
+      const race = pop.race || 'human';
+      const traits = getRaceTraits(race, pop.traits);
+      
+      return {
+        id: generatePopulationId(),
+        name: pop.name,
+        race: race,
+        size: pop.size,
+        culture: pop.culture,
+        traits: pop.traits, // Store custom traits if provided
+        technologyLevel: traits.baseTechLevel, // Use trait-based tech level
+        organization: pop.organization || traits.organizationDefault,
+        beliefs: [],
+        religiousTolerance: 'tolerant', // Will be set by generateReligiousTolerance
+        relations: {},
+        crafts: [],
+      };
+    });
 
     // Create initial location(s) - one per population or shared
     const initialLocations: Location[] = [];
@@ -156,10 +163,10 @@ export class WorldManager {
           const pop2 = initialPopulations[j];
           
           // Monsters are naturally hostile to civilizations
-          if (pop1.race === 'monster') {
+          if (isMonstrous(pop1)) {
             pop1.relations[pop2.id] = 'hostile';
             pop2.relations[pop1.id] = 'hostile';
-          } else if (pop2.race === 'monster') {
+          } else if (isMonstrous(pop2)) {
             pop1.relations[pop2.id] = 'hostile';
             pop2.relations[pop1.id] = 'hostile';
           } else {
@@ -260,7 +267,7 @@ export class WorldManager {
 
     // Generate beliefs for civilization populations
     for (const pop of initialPopulations) {
-      if (pop.race === 'monster') continue;
+      if (isMonstrous(pop)) continue;
       
       // 50% chance to generate a belief at start
       if (this.rng.boolean(0.5)) {
@@ -280,20 +287,21 @@ export class WorldManager {
     const beliefTypes = Object.values(BeliefType);
     const domains = Object.values(DeityDomain);
     
-    // Determine belief type based on race/culture
-    let beliefType: BeliefType;
-    const race = population.race.toLowerCase();
+    // Use trait system for belief type
+    const beliefTypeStr = getDefaultBeliefType(population);
+    const beliefTypeMap: Record<string, BeliefType> = {
+      'pantheon': BeliefType.PANTHEON,
+      'monotheism': BeliefType.MONOTHEISM,
+      'animism': BeliefType.ANIMISM,
+      'philosophy': BeliefType.PHILOSOPHY,
+      'cult': BeliefType.CULT,
+      'folk': BeliefType.FOLK,
+    };
+    let beliefType: BeliefType = beliefTypeMap[beliefTypeStr] || BeliefType.PANTHEON;
     
-    if (race.includes('dwarf')) {
-      beliefType = BeliefType.MONOTHEISM;
-    } else if (race.includes('elf')) {
-      beliefType = BeliefType.ANIMISM;
-    } else if (race.includes('orc') || race.includes('goblin')) {
-      beliefType = BeliefType.CULT;
-    } else if (race.includes('human')) {
+    // For humans, add some randomness
+    if (population.race.toLowerCase().includes('human') && !population.traits?.defaultBeliefType) {
       beliefType = this.rng.boolean(0.5) ? BeliefType.PANTHEON : BeliefType.PHILOSOPHY;
-    } else {
-      beliefType = this.rng.pick(beliefTypes);
     }
     
     // Generate belief name and details
@@ -308,26 +316,30 @@ export class WorldManager {
     
     const name = this.rng.pick(beliefNames[beliefType]);
     
-    // Select domains based on belief type
+    // Select domains - prefer race-specific domains from traits
     const domainCount = beliefType === BeliefType.PANTHEON ? 3 : beliefType === BeliefType.MONOTHEISM ? 2 : 1;
     const selectedDomains: DeityDomain[] = [];
+    const preferredDomains = getPreferredDomains(population);
     const availableDomains = [...domains];
     
-    for (let i = 0; i < domainCount && availableDomains.length > 0; i++) {
+    // First, try to select preferred domains
+    for (const preferred of preferredDomains) {
+      if (selectedDomains.length >= domainCount) break;
+      if (availableDomains.includes(preferred)) {
+        selectedDomains.push(preferred);
+        const idx = availableDomains.indexOf(preferred);
+        availableDomains.splice(idx, 1);
+      }
+    }
+    
+    // Fill remaining slots with random domains
+    for (let i = selectedDomains.length; i < domainCount && availableDomains.length > 0; i++) {
       const idx = this.rng.nextInt(0, availableDomains.length - 1);
       selectedDomains.push(availableDomains[idx]);
       availableDomains.splice(idx, 1);
     }
     
-    // Add race-specific domains
-    if (race.includes('dwarf')) {
-      if (!selectedDomains.includes(DeityDomain.FORTRESS)) selectedDomains[0] = DeityDomain.FORTRESS;
-      if (!selectedDomains.includes(DeityDomain.WAR)) selectedDomains[1] = DeityDomain.WAR;
-    } else if (race.includes('elf')) {
-      if (!selectedDomains.includes(DeityDomain.NATURE)) selectedDomains[0] = DeityDomain.NATURE;
-    } else if (race.includes('orc')) {
-      if (!selectedDomains.includes(DeityDomain.WAR)) selectedDomains[0] = DeityDomain.WAR;
-    }
+    // Domains are already selected from preferences above, no need for race-specific overrides
     
     const alignment = beliefType === BeliefType.CULT ? (this.rng.boolean(0.6) ? 'evil' : 'chaotic') :
                       beliefType === BeliefType.PHILOSOPHY ? 'neutral' :
@@ -355,11 +367,20 @@ export class WorldManager {
   }
 
   private generateReligiousTolerance(population: Population, belief: Belief): 'intolerant' | 'tolerant' | 'pluralistic' {
+    // Use trait-based default if available
+    if (population.traits?.toleranceDefault) {
+      return population.traits.toleranceDefault;
+    }
+    
     if (belief.alignment === 'evil' || belief.type === BeliefType.CULT) {
       return this.rng.boolean(0.6) ? 'intolerant' : 'tolerant';
     }
     if (belief.type === BeliefType.PHILOSOPHY) {
       return 'pluralistic';
+    }
+    const defaultTolerance = getDefaultTolerance(population);
+    if (defaultTolerance !== 'tolerant') {
+      return defaultTolerance;
     }
     return this.rng.pick(['tolerant', 'tolerant', 'pluralistic', 'intolerant'] as const);
   }
@@ -447,7 +468,7 @@ export class WorldManager {
       if (existingPop.id === population.id) continue;
       
       // Monsters are hostile to civilizations
-      if (population.race === 'monster' || existingPop.race === 'monster') {
+      if (isMonstrous(population) || isMonstrous(existingPop)) {
         population.relations[existingPop.id] = 'hostile';
         existingPop.relations[population.id] = 'hostile';
       } else {

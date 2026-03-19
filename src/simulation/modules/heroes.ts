@@ -6,6 +6,7 @@
 import { WorldState, Hero, HeroStatus, HeroClass, Quest, QuestStatus, Craft, Population, QuestType, CraftRarity, CraftCategory } from '../../types';
 import { SeededRandom } from '../../utils/random';
 import { generateEventId, generateHeroId, generateCraftId } from '../../utils/idGenerator';
+import { isMonstrous, getTechLevel } from '../../utils/raceTraits';
 
 export class HeroModule {
   private rng: SeededRandom;
@@ -77,10 +78,14 @@ export class HeroModule {
     quest: Quest, 
     year: number
   ): boolean {
+    // Cannot spawn heroes from monstrous populations
+    if (isMonstrous(population)) return false;
+    
     // Tech level requirement - lowered to allow heroes in earlier eras
     // Critical: tech 1+, High: tech 2+, Medium: tech 3+, Low: tech 4+
+    const popTechLevel = getTechLevel(population);
     const minTechLevel = quest.urgency === 'critical' ? 1 : quest.urgency === 'high' ? 2 : quest.urgency === 'medium' ? 3 : 4;
-    if (population.technologyLevel < minTechLevel) {
+    if (popTechLevel < minTechLevel) {
       return false;
     }
 
