@@ -443,3 +443,6 @@ export interface InitialConditions {
   enableMonsters?: boolean; // Enable monster spawning
   monsterCount?: number; // Number of monster populations to spawn (0-3)
 }
+
+// Re-export LLM decision types
+export * from './llmDecision';

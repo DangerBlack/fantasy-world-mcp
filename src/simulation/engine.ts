@@ -9,6 +9,7 @@ import { WorldState, Event, SimulationParams, Change, Resource, EventType, Quest
 import { WorldManager } from '../core/worldManager';
 import { SeededRandom } from '../utils/random';
 import { EventDeduplicator } from './utils/eventDeduplicator';
+import { LLMStepDecision } from '../types/llmDecision';
 import {
   PopulationModule,
   MonsterModule,
@@ -63,7 +64,11 @@ export class SimulationEngine {
     return this.heroModule;
   }
 
-  simulate(worldId: string, params: SimulationParams): WorldState {
+  simulate(
+    worldId: string, 
+    params: SimulationParams,
+    llmDecision?: LLMStepDecision
+  ): WorldState {
     const world = this.worldManager.getWorld(worldId);
     if (!world) {
       throw new Error(`World ${worldId} not found`);
@@ -78,8 +83,15 @@ export class SimulationEngine {
       // Check for quests with expired deadlines
       this.checkQuestDeadlines(world, nextYear);
 
-      // Evaluate all active rules using modules
-      const newEvents = this.evaluateRules(world, currentYear, nextYear, params);
+      let newEvents: Event[];
+      
+      if (llmDecision) {
+        // Apply LLM decisions instead of RNG-based logic
+        newEvents = this.applyLLMDecisions(world, llmDecision, nextYear, params);
+      } else {
+        // Evaluate all active rules using modules (existing RNG logic)
+        newEvents = this.evaluateRules(world, currentYear, nextYear, params);
+      }
       
       // Deduplicate events to reduce noise and improve narrative quality
       const deduplicatedEvents = this.deduplicateEvents(newEvents);
@@ -321,6 +333,92 @@ export class SimulationEngine {
 
     // Natural events
     events.push(...this.checkNaturalEvents(world, currentYear, nextYear));
+
+    // Link events causally
+    this.linkEventsCausally(world, events);
+
+    return events;
+  }
+
+  /**
+   * Apply LLM decisions for a simulation step
+   * 
+   * This method processes LLM-driven decisions for technological progress,
+   * custom events, and population changes, while still running some
+   * background simulation modules for world consistency.
+   * 
+   * @param world - Current world state
+   * @param llmDecision - LLM decision to apply
+   * @param year - Current simulation year
+   * @param params - Simulation parameters
+   * @returns Array of events generated from LLM decisions
+   */
+  private applyLLMDecisions(
+    world: WorldState,
+    llmDecision: LLMStepDecision,
+    year: number,
+    params: SimulationParams
+  ): Event[] {
+    const events: Event[] = [];
+
+    // Apply resource dynamics (consumption, regeneration) - always run for consistency
+    events.push(...this.resourceModule.checkResourceDynamics(world, year - params.stepSize, year));
+
+    // Apply LLM decisions for technology and custom events
+    const llmResult = this.resourceModule.applyLLMDecision(world, llmDecision, year);
+    events.push(...llmResult.events);
+
+    // Log validation errors if any
+    if (!llmResult.validation.isValid) {
+      console.warn('LLM decision validation errors:', llmResult.validation.errors);
+    }
+
+    // Run other modules but skip RNG-based tech progress (handled by LLM)
+    if (params.enableConflict !== false) {
+      events.push(...this.populationModule.checkPopulationDynamics(world, year - params.stepSize, year));
+      events.push(...this.conflictModule.checkConflictGeneration(world, year - params.stepSize, year));
+    }
+
+    if (params.enableMigration !== false) {
+      events.push(...this.conflictModule.checkMigration(world, year - params.stepSize, year, () => 
+        this.locationModule.generateNewLocationName(world)));
+    }
+
+    // Monster activity (still RNG-based for now)
+    events.push(...this.monsterModule.checkMonsterActivity(world, year - params.stepSize, year));
+
+    // Location evolution
+    events.push(...this.locationModule.checkLocationEvolution(world, year - params.stepSize, year));
+
+    // Quest generation
+    events.push(...this.questModule.checkQuestGeneration(world, year - params.stepSize, year));
+
+    // Hero spawning for open quests
+    const heroResult = this.heroModule.checkHeroSpawning(world, year);
+    for (const hero of heroResult.spawned) {
+      events.push({
+        id: generateEventId(),
+        year,
+        type: 'hero_spawned' as any,
+        title: `Hero Born: ${hero.name}`,
+        description: `${hero.name}, a ${hero.heroClass} from ${hero.culture}, emerges to answer the call`,
+        causes: [],
+        effects: [],
+        impact: {
+          society: [{
+            type: 'create',
+            target: hero.name,
+            description: `New hero ${hero.name} spawned`,
+          }],
+        },
+      });
+    }
+
+    // Craft generation
+    events.push(...this.craftModule.checkCraftGeneration(world, year - params.stepSize, year));
+
+    // Natural events (still RNG-based)
+    events.push(...this.checkNaturalEvents(world, year - params.stepSize, year));
 
     // Link events causally
     this.linkEventsCausally(world, events);

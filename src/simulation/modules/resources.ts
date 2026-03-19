@@ -8,6 +8,7 @@ import { WorldState as WorldStateType } from '../../types';
 import { SeededRandom } from '../../utils/random';
 import { generateEventId } from '../../utils/idGenerator';
 import { isMonstrous } from '../../utils/raceTraits';
+import { LLMStepDecision, LLMTechnologicalProgress, LLMDecisionValidation, LLMEventDecision } from '../../types/llmDecision';
 
 export class ResourceModule {
   private rng: SeededRandom;
@@ -394,5 +395,319 @@ export class ResourceModule {
 
     // Filter out technologies already discovered
     return available.filter(tech => !societyTechnologies.includes(tech));
+  }
+
+  /**
+   * Validate if a population can discover a specific technology
+   * Checks:
+   * 1. Population exists and is not monstrous
+   * 2. Technology is at or below population's tech level
+   * 3. Technology prerequisites are met (all lower-level techs discovered)
+   * 4. Required resources are available
+   * 
+   * @param world - Current world state
+   * @param populationId - ID of the population
+   * @param technology - Name of the technology to discover
+   * @returns Validation result with error message if invalid
+   */
+  validateTechDiscovery(
+    world: WorldState,
+    populationId: string,
+    technology: string
+  ): { valid: boolean; error?: string } {
+    // Check population exists
+    const population = world.society.populations.find(p => p.id === populationId);
+    if (!population) {
+      return { valid: false, error: `Population with ID ${populationId} not found` };
+    }
+
+    // Check population is not monstrous
+    if (isMonstrous(population)) {
+      return { valid: false, error: `Monstrous populations cannot discover technologies` };
+    }
+
+    // Check technology exists in tech tree
+    const techLevel = this.getTechLevelForTechnology(technology);
+    if (techLevel === null) {
+      return { valid: false, error: `Unknown technology: ${technology}` };
+    }
+
+    // Check population has sufficient tech level
+    if (population.technologyLevel < techLevel) {
+      return { 
+        valid: false, 
+        error: `Population tech level ${population.technologyLevel} is insufficient for ${technology} (requires level ${techLevel})` 
+      };
+    }
+
+    // Check prerequisites - all technologies at lower levels must be discovered
+    for (let level = 0; level < techLevel; level++) {
+      const levelTechs = this.getTechnologiesForLevel(level);
+      const hasAllLevelTechs = levelTechs.every(tech => 
+        world.society.technologies.includes(tech)
+      );
+      if (!hasAllLevelTechs && levelTechs.length > 0) {
+        // Check if at least one tech from this level is discovered
+        const hasAnyLevelTech = levelTechs.some(tech => 
+          world.society.technologies.includes(tech)
+        );
+        if (!hasAnyLevelTech && level > 0) {
+          return {
+            valid: false,
+            error: `Prerequisite technologies from level ${level} not discovered: ${levelTechs.join(', ')}`
+          };
+        }
+      }
+    }
+
+    // Check resource requirements
+    const requiredResources = this.getTechnologyResourceRequirements(technology);
+    for (const [resource, requiredAmount] of Object.entries(requiredResources)) {
+      const availableAmount = world.geography.resources[resource as Resource] || 0;
+      if (availableAmount < requiredAmount) {
+        return {
+          valid: false,
+          error: `Insufficient ${resource}: have ${Math.floor(availableAmount)}, need ${requiredAmount}`
+        };
+      }
+    }
+
+    // Check if technology already discovered
+    if (world.society.technologies.includes(technology)) {
+      return { valid: false, error: `Technology ${technology} already discovered` };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Get technologies available at a specific tech level
+   */
+  private getTechnologiesForLevel(level: number): string[] {
+    const techTree: Record<number, string[]> = {
+      0: ['Stone Tools', 'Fire Mastery', 'Basic Shelter'],
+      1: ['Language Development', 'Social Cooperation'],
+      2: ['Agriculture', 'Pottery', 'Domestication', 'Basic Medicine'],
+      3: ['Bronze Working', 'Wheel', 'Writing', 'Irrigation', 'Mining'],
+      4: ['Iron Working', 'Architecture', 'Mathematics', 'Law'],
+      5: ['Steel', 'Navigation', 'Philosophy', 'Advanced Medicine'],
+      6: ['Gunpowder', 'Printing', 'Telescope', 'Banking'],
+      7: ['Industrial Revolution', 'Steam Power', 'Electricity'],
+      8: ['Telegraph', 'Railways', 'Mass Production'],
+      9: ['Electricity Grid', 'Internal Combustion', 'Aviation'],
+      10: ['Modern Computing', 'Internet', 'Space Technology'],
+    };
+    return techTree[level] || [];
+  }
+
+  /**
+   * Get resource requirements for a technology
+   */
+  private getTechnologyResourceRequirements(technology: string): Record<string, number> {
+    const requirements: Record<string, Record<string, number>> = {
+      'Bronze Working': { copper: 20, tin: 10 },
+      'Iron Working': { iron: 30, coal: 10 },
+      'Steel': { iron: 40, coal: 20 },
+      'Architecture': { stone: 30, wood: 20 },
+      'Mining': { stone: 10 },
+      'Gunpowder': { sulfur: 10, coal: 15 },
+      'Industrial Revolution': { iron: 50, coal: 40 },
+      'Steam Power': { iron: 30, coal: 30 },
+      'Electricity': { copper: 30, coal: 20 },
+    };
+    return requirements[technology] || {};
+  }
+
+  /**
+   * Apply an LLM-forced technological discovery
+   * 
+   * This method validates and applies a technology discovery decision from an LLM,
+   * creating appropriate events and updating world state.
+   * 
+   * @param world - Current world state (modified in place)
+   * @param population - The population making the discovery
+   * @param technology - The technology being discovered
+   * @param narrative - Narrative description of the discovery
+   * @param year - Current simulation year
+   * @returns Event created for this discovery, or null if validation failed
+   */
+  applyLLMTechDiscovery(
+    world: WorldState,
+    population: Population,
+    technology: string,
+    narrative: string,
+    year: number
+  ): Event | null {
+    // Validate the discovery
+    const validation = this.validateTechDiscovery(world, population.id, technology);
+    if (!validation.valid) {
+      console.warn(`LLM tech discovery validation failed: ${validation.error}`);
+      return null;
+    }
+
+    // Add technology to society
+    if (!world.society.technologies.includes(technology)) {
+      world.society.technologies.push(technology);
+    }
+
+    // Get the tech level for this technology
+    const newTechLevel = this.getTechLevelForTechnology(technology);
+    
+    // Update population technology level if they've reached a new milestone
+    if (newTechLevel && population.technologyLevel < newTechLevel) {
+      population.technologyLevel = newTechLevel;
+    }
+
+    // Create technological progress event
+    const event: Event = {
+      id: generateEventId(),
+      year,
+      type: EventType.TECHNOLOGICAL,
+      title: `Discovery: ${technology}`,
+      description: `${population.name} has discovered ${technology}. ${narrative}`,
+      causes: [],
+      effects: [],
+      impact: {
+        society: [{
+          type: 'create',
+          target: technology,
+          description: `New technology discovered by ${population.name}`,
+        }],
+      },
+    };
+
+    // Create tech milestone event if this is a level-up
+    if (newTechLevel && population.technologyLevel === newTechLevel) {
+      const milestoneEvent: Event = {
+        id: generateEventId(),
+        year,
+        type: EventType.TECH_MILESTONE,
+        title: `Tech Level ${newTechLevel}: ${technology}`,
+        description: `${population.name} has reached technology level ${newTechLevel} with the discovery of ${technology}`,
+        causes: [],
+        effects: [event.id],
+        impact: {
+          society: [{
+            type: 'create',
+            target: `TechLevel_${newTechLevel}`,
+            description: `Population advanced to tech level ${newTechLevel}`,
+          }],
+        },
+      };
+      world.events.push(milestoneEvent);
+      world.timeline.events.push(milestoneEvent);
+    }
+
+    return event;
+  }
+
+  /**
+   * Validate and apply LLM decisions for a simulation step
+   * 
+   * @param world - Current world state
+   * @param decision - LLM decision to apply
+   * @param year - Current simulation year
+   * @returns Validation result with applied events
+   */
+  applyLLMDecision(
+    world: WorldState,
+    decision: LLMStepDecision,
+    year: number
+  ): { validation: LLMDecisionValidation; events: Event[] } {
+    const events: Event[] = [];
+    const errors: LLMDecisionValidation['errors'] = [];
+    const validTechProgress: LLMTechnologicalProgress[] = [];
+    const validEvents: LLMEventDecision[] = [];
+    const validPopChanges = decision.populationChanges ? [...decision.populationChanges] : [];
+
+    // Validate and apply technological progress
+    for (let i = 0; i < (decision.technologicalProgress?.length || 0); i++) {
+      const progress = decision.technologicalProgress?.[i];
+      if (!progress) continue;
+      const validation = this.validateTechDiscovery(world, progress.populationId, progress.technology);
+      
+      if (validation.valid) {
+        validTechProgress.push(progress);
+        const population = world.society.populations.find(p => p.id === progress.populationId);
+        if (population) {
+          const event = this.applyLLMTechDiscovery(world, population, progress.technology, progress.narrative, year);
+          if (event) {
+            events.push(event);
+          }
+        }
+      } else {
+        errors.push({
+          decisionType: 'technologicalProgress',
+          index: i,
+          message: validation.error || 'Unknown validation error',
+        });
+      }
+    }
+
+    // Validate and apply custom events
+    for (let i = 0; i < (decision.events?.length || 0); i++) {
+      const eventDecision = decision.events?.[i];
+      if (!eventDecision) continue;
+      
+      // Validate that all populations exist
+      const invalidPopulations = eventDecision.populations.filter(
+        popId => !world.society.populations.find(p => p.id === popId)
+      );
+      
+      if (invalidPopulations.length > 0) {
+        errors.push({
+          decisionType: 'events',
+          index: i,
+          message: `Unknown populations: ${invalidPopulations.join(', ')}`,
+        });
+      } else {
+        validEvents.push(eventDecision);
+        const event: Event = {
+          id: generateEventId(),
+          year,
+          type: eventDecision.type as EventType,
+          title: eventDecision.title,
+          description: eventDecision.description,
+          causes: [],
+          effects: [],
+          impact: {
+            society: eventDecision.populations.map(popId => ({
+              type: 'create',
+              target: eventDecision.title,
+              description: `${eventDecision.title} affects ${world.society.populations.find(p => p.id === popId)?.name || popId}`,
+            })),
+          },
+        };
+        events.push(event);
+      }
+    }
+
+    // Apply population changes
+    for (const change of validPopChanges || []) {
+      const population = world.society.populations.find(p => p.id === change.populationId);
+      if (population) {
+        if (change.sizeDelta !== undefined) {
+          population.size = Math.max(0, population.size + change.sizeDelta);
+        }
+        if (change.technologyLevel !== undefined) {
+          // Validate tech level change
+          if (change.technologyLevel >= 0 && change.technologyLevel <= 10) {
+            population.technologyLevel = change.technologyLevel;
+          }
+        }
+      }
+    }
+
+    const validation: LLMDecisionValidation = {
+      isValid: errors.length === 0,
+      errors,
+      validDecisions: {
+        technologicalProgress: validTechProgress,
+        events: validEvents,
+        populationChanges: validPopChanges,
+      },
+    };
+
+    return { validation, events };
   }
 }
