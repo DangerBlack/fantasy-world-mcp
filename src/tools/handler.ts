@@ -49,6 +49,7 @@ export class ToolHandler {
           race: p.race || 'human',
           culture: p.culture,
           organization: p.organization,
+          traits: p.traits, // Pass through custom traits
         }))
       : [{
           name: args.population.name,
@@ -56,6 +57,7 @@ export class ToolHandler {
           race: args.population.race || 'human',
           culture: args.population.culture,
           organization: args.population.organization,
+          traits: args.population.traits, // Pass through custom traits
         }];
 
     const conditions: InitialConditions = {

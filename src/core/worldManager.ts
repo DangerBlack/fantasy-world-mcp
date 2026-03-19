@@ -85,7 +85,7 @@ export class WorldManager {
         race: race,
         size: pop.size,
         culture: pop.culture,
-        traits: pop.traits, // Store custom traits if provided
+        traits: traits, // Store complete merged traits (defaults + custom overrides)
         technologyLevel: traits.baseTechLevel, // Use trait-based tech level
         organization: pop.organization || traits.organizationDefault,
         beliefs: [],
