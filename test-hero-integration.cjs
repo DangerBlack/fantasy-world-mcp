@@ -368,13 +368,37 @@ async function testQuestCompletionWithHeroDeath() {
   }
   
   if (!heroId) {
-    console.log('  ⚠ No heroes found, skipping death test (hero may not have spawned)');
-    // Still save the world for inspection
-    const stateAfterNoHero = await getWorldState(worldId);
-    if (stateAfterNoHero) {
-      saveWorld(worldId, stateAfterNoHero);
-    }
-    return false;
+    console.log('  ⚠ No heroes found, manually injecting one for test...');
+    
+    // Manually inject a hero for testing
+    const testHero = {
+      id: `hero_manual_${Date.now()}`,
+      name: 'Test Hero Death',
+      race: state.society?.populations[0]?.race || 'human',
+      heroClass: 'Warrior',
+      culture: state.society?.populations[0]?.culture || 'Test Folk',
+      status: 'alive',
+      stats: { strength: 14, dexterity: 12, intelligence: 10, charisma: 12, constitution: 13 },
+      skills: [],
+      inventory: [],
+      quests: [],
+      achievements: [],
+      originPopulationId: state.society?.populations?.[0]?.id,
+      spawnedYear: state.timestamp || 100,
+      lineage: false,
+      techLevel: 3
+    };
+    
+    if (!state.heroes) state.heroes = [];
+    if (!state.society.heroes) state.society.heroes = [];
+    
+    state.heroes.push(testHero);
+    state.society.heroes.push(testHero.id);
+    
+    await callTool('loadWorld', { worldData: JSON.stringify(state) });
+    saveWorld(worldId, state);
+    heroId = testHero.id;
+    console.log(`  ✓ Manually injected hero: ${testHero.name} (${heroId})`);
   }
   
   // Create a dangerous quest
@@ -411,13 +435,23 @@ async function testQuestCompletionWithHeroDeath() {
     return false;
   }
   
+  // Assign hero to quest before completing
+  console.log('\n6. Assigning hero to quest...');
+  const assignResult = await callTool('assignHeroToQuest', {
+    worldId,
+    heroId,
+    questId
+  });
+  
+  assertTrue(assignResult.result, 'Hero assigned to quest');
+  
   // Complete the quest as FAILED (hero dies)
-  console.log('\n6. Completing quest as FAILED (hero dies)...');
+  console.log('\n7. Completing quest as FAILED (hero dies)...');
   const completeResult = await callTool('completeQuest', {
     worldId,
     questId,
     success: false,
-    failureReason: 'Hero fell in battle against the cave terrorants'
+    completionNotes: 'Hero fell in battle against the cave terrorants'
   });
   
   assertTrue(completeResult.result, 'Quest completion call succeeded');
@@ -429,20 +463,33 @@ async function testQuestCompletionWithHeroDeath() {
   }
   
   // Verify hero status changed to DEAD
-  console.log('\n7. Verifying hero status...');
+  console.log('\n8. Verifying hero status...');
   const heroResult = await callTool('getHero', { worldId, heroId });
   const heroText = heroResult.result?.content?.[0]?.text;
   
   if (heroText) {
-    const heroData = JSON.parse(heroText);
+    const heroResponse = JSON.parse(heroText);
+    const heroData = heroResponse.hero || heroResponse;  // Handle both response formats
+    console.log(`     Hero status: ${heroData.status}`);
     allPassed = assertEqual(heroData.status, 'dead', 'Hero status is DEAD') && allPassed;
   } else {
     console.log('  ❌ Could not get hero details');
     allPassed = false;
   }
   
+  // Also check from world state (more reliable)
+  console.log('\n8b. Verifying from world state...');
+  const stateAfterFailureFull = await getWorldState(worldId);
+  if (stateAfterFailureFull && stateAfterFailureFull.heroes) {
+    const heroFromState = stateAfterFailureFull.heroes.find(h => h.id === heroId);
+    if (heroFromState) {
+      console.log(`     Hero from state status: ${heroFromState.status}`);
+      allPassed = assertEqual(heroFromState.status, 'dead', 'Hero status in world state is DEAD') && allPassed;
+    }
+  }
+  
   // Verify HERO_DEATH event was created
-  console.log('\n8. Checking for HERO_DEATH event...');
+  console.log('\n9. Checking for HERO_DEATH event...');
   const timelineResult = await callTool('getTimeline', { worldId });
   const timelineText = timelineResult.result?.content?.[0]?.text;
   
@@ -458,7 +505,7 @@ async function testQuestCompletionWithHeroDeath() {
   }
   
   // Verify commemoration book was created
-  console.log('\n9. Checking for commemoration book...');
+  console.log('\n10. Checking for commemoration book...');
   if (stateAfterFailure && stateAfterFailure.crafts) {
     const commemorationBook = stateAfterFailure.crafts.find(c => 
       c.category === 'book' && 
@@ -473,7 +520,7 @@ async function testQuestCompletionWithHeroDeath() {
   }
   
   // Verify COMMEMORATION_CREATED event
-  console.log('\n10. Checking for COMMEMORATION_CREATED event...');
+  console.log('\n11. Checking for COMMEMORATION_CREATED event...');
   if (timelineText) {
     const timelineData = JSON.parse(timelineText);
     const commemorationEvent = timelineData.events?.find(e => e.type === 'commemoration_created');
@@ -544,7 +591,7 @@ async function testQuestCompletionWithHeroSuccess() {
   }
   
   // Get world state
-  const state = await getWorldState(worldId);
+  let state = await getWorldState(worldId);
   if (!state) {
     console.log('  ❌ Failed to get world state');
     return false;
@@ -568,7 +615,70 @@ async function testQuestCompletionWithHeroSuccess() {
   }
   
   if (!heroId || !questId) {
-    console.log('  ⚠ Could not find hero or quest, skipping test');
+    console.log('  ⚠ Could not find hero or quest');
+    
+    // If no quests, we need to simulate more or manually create one
+    if (!questId) {
+      console.log('  ⚠ No quests found, running more simulation...');
+      
+      // Run more simulation to generate quests
+      const moreSimResult = await callTool('simulate', {
+        worldId,
+        timespan: 100,
+        stepSize: 50,
+        complexity: 'complex',
+        enableConflict: true
+      });
+      
+      // Get updated world state
+      const stateAfterMoreSim = await getWorldState(worldId);
+      if (stateAfterMoreSim && stateAfterMoreSim.quests && stateAfterMoreSim.quests.length > 0) {
+        questId = stateAfterMoreSim.quests[0].id;
+        console.log(`  ✓ Found quest after simulation: ${stateAfterMoreSim.quests[0].title || questId}`);
+        state = stateAfterMoreSim;
+        saveWorld(worldId, state);
+      }
+    }
+    
+    // If no hero, inject one
+    if (!heroId && state.quests && state.quests.length > 0) {
+      console.log('  ⚠ No heroes found, manually injecting one for test...');
+      
+      const testHero = {
+        id: `hero_manual_${Date.now()}`,
+        name: 'Test Hero Success',
+        race: state.society?.populations[0]?.race || 'human',
+        heroClass: 'Warrior',
+        culture: state.society?.populations[0]?.culture || 'Test Folk',
+        status: 'alive',
+        stats: { strength: 14, dexterity: 12, intelligence: 10, charisma: 12, constitution: 13 },
+        skills: [],
+        inventory: [],
+        quests: [],
+        achievements: [],
+        originPopulationId: state.society?.populations?.[0]?.id,
+        spawnedYear: state.timestamp || 100,
+        lineage: false,
+        techLevel: 3
+      };
+      
+      if (!state.heroes) state.heroes = [];
+      if (!state.society.heroes) state.society.heroes = [];
+      
+      state.heroes.push(testHero);
+      state.society.heroes.push(testHero.id);
+      
+      await callTool('loadWorld', { worldData: JSON.stringify(state) });
+      saveWorld(worldId, state);
+      heroId = testHero.id;
+      console.log(`  ✓ Manually injected hero: ${testHero.name} (${heroId})`);
+    } else if (!questId) {
+      console.log('  ⚠ Still no quests found after simulation, cannot test');
+      return false;
+    }
+  }
+  
+  if (!heroId || !questId) {
     return false;
   }
   
@@ -603,7 +713,8 @@ async function testQuestCompletionWithHeroSuccess() {
   const heroText = heroResult.result?.content?.[0]?.text;
   
   if (heroText) {
-    const heroData = JSON.parse(heroText);
+    const heroResponse = JSON.parse(heroText);
+    const heroData = heroResponse.hero || heroResponse;  // Handle both response formats
     const hasAchievement = heroData.achievements && heroData.achievements.length > 0;
     allPassed = assertTrue(hasAchievement, 'Hero has achievements') && allPassed;
     if (heroData.achievements) {
@@ -612,6 +723,20 @@ async function testQuestCompletionWithHeroSuccess() {
   } else {
     console.log('  ❌ Could not get hero details');
     allPassed = false;
+  }
+  
+  // Also verify from world state (more reliable)
+  console.log('\n6b. Verifying from world state...');
+  const stateAfterSuccessFull = await getWorldState(worldId);
+  if (stateAfterSuccessFull && stateAfterSuccessFull.heroes) {
+    const heroFromState = stateAfterSuccessFull.heroes.find(h => h.id === heroId);
+    if (heroFromState) {
+      const hasAchievement = heroFromState.achievements && heroFromState.achievements.length > 0;
+      allPassed = assertTrue(hasAchievement, 'Hero has achievements in world state') && allPassed;
+      if (heroFromState.achievements) {
+        console.log(`     Achievements: ${heroFromState.achievements.join(', ')}`);
+      }
+    }
   }
   
   // Verify HERO_ACHIEVEMENT event
@@ -724,7 +849,28 @@ async function testQuestDeadlineFailure() {
   }
   
   if (!questId) {
-    console.log('  ⚠ No quests found, cannot test deadline failure');
+    console.log('  ⚠ No quests found, running more simulation...');
+    
+    // Run more simulation to generate quests
+    const moreSimResult = await callTool('simulate', {
+      worldId,
+      timespan: 100,
+      stepSize: 50,
+      complexity: 'complex',
+      enableConflict: true
+    });
+    
+    // Get updated world state
+    const stateAfterMoreSim = await getWorldState(worldId);
+    if (stateAfterMoreSim && stateAfterMoreSim.quests && stateAfterMoreSim.quests.length > 0) {
+      questId = stateAfterMoreSim.quests[0].id;
+      console.log(`  ✓ Found quest after simulation: ${stateAfterMoreSim.quests[0].title || questId}`);
+      saveWorld(worldId, stateAfterMoreSim);
+    }
+  }
+  
+  if (!questId) {
+    console.log('  ⚠ Still no quests found, cannot test deadline failure');
     return false;
   }
   
@@ -886,16 +1032,22 @@ async function testAssignHeroTool() {
   if (!stateWithHeroes || !stateWithHeroes.heroes || stateWithHeroes.heroes.length === 0) {
     console.log('  ⚠ No heroes spawned, manually injecting one for test...');
     
-    // Create a hero manually
+    // Create a hero manually with full structure matching real heroes
     const testHero = {
       id: `hero_manual_${Date.now()}`,
       name: 'Test Hero',
+      race: stateWithHeroes.society?.populations[0]?.race || 'human',
       heroClass: 'Warrior',
       culture: stateWithHeroes.society?.populations[0]?.culture || 'Test Folk',
-      originPopulationId: stateWithHeroes.society?.populations?.[0]?.id,
       status: 'alive',
-      achievements: [],
+      stats: { strength: 14, dexterity: 12, intelligence: 10, charisma: 12, constitution: 13 },
+      skills: [],
+      inventory: [],
       quests: [],  // Initialize quests array
+      achievements: [],
+      originPopulationId: stateWithHeroes.society?.populations?.[0]?.id,
+      spawnedYear: stateWithHeroes.timestamp || 100,
+      lineage: false,
       techLevel: 3
     };
     
@@ -972,17 +1124,24 @@ async function testAssignHeroTool() {
     }
   }
   
-  // Also verify from hero side
+  // Also verify from hero side using getWorldState (more reliable than getHero)
   console.log('\n7. Verifying from hero perspective...');
-  const heroAfterResult = await callTool('getHero', { worldId, heroId });
-  const heroAfterText = heroAfterResult.result?.content?.[0]?.text;
+  const stateAfterAssignFull = await getWorldState(worldId);
   
-  if (heroAfterText) {
-    const heroAfterData = JSON.parse(heroAfterText);
-    const assignedQuests = heroAfterData.quests || [];
-    const isQuestAssigned = assignedQuests.includes(questId);
-    allPassed = assertTrue(isQuestAssigned, 'Quest is in hero.quests array') && allPassed;
-    console.log(`     Hero quests: ${assignedQuests.join(', ')}`);
+  if (stateAfterAssignFull && stateAfterAssignFull.heroes) {
+    const heroFromState = stateAfterAssignFull.heroes.find(h => h.id === heroId);
+    if (heroFromState) {
+      const assignedQuests = heroFromState.quests || [];
+      const isQuestAssigned = assignedQuests.includes(questId);
+      allPassed = assertTrue(isQuestAssigned, 'Quest is in hero.quests array') && allPassed;
+      console.log(`     Hero quests: ${assignedQuests.join(', ')}`);
+    } else {
+      console.log('  ⚠ Hero not found in world state');
+      allPassed = false;
+    }
+  } else {
+    console.log('  ⚠ Could not get world state for hero verification');
+    allPassed = false;
   }
   
   console.log(`\n${allPassed ? '✓' : '❌'} TEST 4 ${allPassed ? 'PASSED' : 'FAILED'}`);

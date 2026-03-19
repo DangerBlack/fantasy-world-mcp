@@ -492,29 +492,40 @@ export class ToolHandler {
       world.timeline.events.push(event);
     }
 
-    // Process hero achievements - create HERO_ACHIEVEMENT events if needed
-    for (const hero of heroResult.deaths) {
-      // Check for new achievements
-      const quest = world.quests.find(q => q.assignedHeroes?.includes(hero.id));
-      if (quest && quest.status === QuestStatus.COMPLETED) {
-      const event = {
-        id: generateEventId(),
-        year: world.timestamp,
-        type: EventType.HERO_ACHIEVEMENT,
-          title: `${hero.name} Achieves: ${quest.title}`,
-          description: `${hero.name} has completed the quest "${quest.title}"`,
-          causes: [],
-          effects: [],
-          impact: {
-            society: [{
-              type: 'create' as const,
-              target: hero.name,
-              description: `Hero achieved: ${quest.title}`,
-            }],
-          },
-        };
-        world.events.push(event);
-        world.timeline.events.push(event);
+    // Process hero achievements - create HERO_ACHIEVEMENT events for all assigned heroes
+    if (quest.assignedHeroes) {
+      for (const heroId of quest.assignedHeroes) {
+        const hero = world.heroes?.find(h => h.id === heroId);
+        if (!hero) continue;
+        
+        // Check for new achievements (either success or failure)
+        if (quest.status === QuestStatus.COMPLETED || quest.status === QuestStatus.FAILED) {
+          const achievementText = quest.status === QuestStatus.COMPLETED 
+            ? `Completed: ${quest.title}`
+            : `Failed: ${quest.title}`;
+          
+          // Only create event if hero has this achievement
+          if (hero.achievements && hero.achievements.includes(achievementText)) {
+            const event = {
+              id: generateEventId(),
+              year: world.timestamp,
+              type: EventType.HERO_ACHIEVEMENT,
+              title: `${hero.name} Achieves: ${quest.title}`,
+              description: `${hero.name} has ${quest.status === QuestStatus.COMPLETED ? 'completed' : 'failed'} the quest "${quest.title}"`,
+              causes: [],
+              effects: [],
+              impact: {
+                society: [{
+                  type: 'create' as const,
+                  target: hero.name,
+                  description: `Hero achieved: ${quest.title}`,
+                }],
+              },
+            };
+            world.events.push(event);
+            world.timeline.events.push(event);
+          }
+        }
       }
     }
 
