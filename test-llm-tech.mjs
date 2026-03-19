@@ -13,6 +13,8 @@ import { SimulationEngine } from './dist/simulation/engine.js';
 import { ResourceModule } from './dist/simulation/modules/resources.js';
 import { generateLLMContext } from './dist/utils/llmPrompt.js';
 import { SeededRandom } from './dist/utils/random.js';
+import { EventType } from './dist/types/index.js';
+import { isMonstrous } from './dist/utils/raceTraits.js';
 
 // Test results tracking
 let passedTests = 0;
@@ -398,6 +400,263 @@ async function runTests() {
     !monsterValidation.valid && monsterValidation.error?.includes('Monstrous'),
     'Test 6: Monsters cannot discover tech',
     `Should block monsters, got: ${monsterValidation.error}`
+  );
+
+  // ============================================
+  // Test 7: LLM adds a new population (migration)
+  // ============================================
+  console.log('\n--- Test 7: LLM New Population (Migration) ---');
+  
+  const world7 = await worldManager.createWorld({
+    ...initialWorld,
+    population: {
+      ...initialWorld.population,
+      name: 'Original Village',
+    },
+  });
+  const worldId7 = world7.id;
+  world7.timestamp = 100;
+  worldManager.updateWorld(worldId7, world7);
+
+  const migrationDecision = {
+    technologicalProgress: [],
+    events: [],
+    populationChanges: [],
+    newPopulations: [
+      {
+        name: 'Refugee Clan',
+        race: 'human',
+        size: 150,
+        culture: 'Mountain Folk',
+        organization: 'tribal',
+      },
+    ],
+  };
+
+  const result7 = simulationEngine.simulate(worldId7, params, migrationDecision);
+  
+  // Check that new population was added
+  const refugeeClan = result7.society.populations.find(p => p.name === 'Refugee Clan');
+  assert(
+    refugeeClan !== undefined,
+    'Test 7: New population added',
+    'Refugee Clan should exist in populations'
+  );
+
+  assert(
+    refugeeClan?.size === 150,
+    'Test 7: New population has correct size',
+    `Expected size 150, got ${refugeeClan?.size}`
+  );
+
+  // Check that arrival event was created
+  const arrivalEvent = result7.events.find(e => e.title.includes('Refugee Clan') && e.type === EventType.MIGRATION);
+  assert(
+    arrivalEvent !== undefined,
+    'Test 7: Migration event created',
+    'Should have created a migration event'
+  );
+
+  // Check that relations were set up (neutral for civilizations)
+  const originalPop = result7.society.populations.find(p => p.name === 'Original Village');
+  assert(
+    refugeeClan?.relations[originalPop?.id || ''] === 'neutral',
+    'Test 7: Neutral relations established',
+    'New civilization should have neutral relations with existing populations'
+  );
+
+  // ============================================
+  // Test 8: LLM reduces population to 0 (extinction)
+  // ============================================
+  console.log('\n--- Test 8: LLM Population Extinction ---');
+  
+  const world8 = await worldManager.createWorld({
+    ...initialWorld,
+    population: {
+      ...initialWorld.population,
+      name: 'Fragile Village',
+      size: 100, // Small population
+    },
+  });
+  const worldId8 = world8.id;
+  world8.timestamp = 100;
+  worldManager.updateWorld(worldId8, world8);
+
+  const extinctionDecision = {
+    technologicalProgress: [],
+    events: [],
+    populationChanges: [
+      {
+        populationId: world8.society.populations[0].id,
+        sizeDelta: -100, // Reduce to 0
+      },
+    ],
+    newPopulations: [],
+  };
+
+  const result8 = simulationEngine.simulate(worldId8, params, extinctionDecision);
+  const fragileVillage = result8.society.populations.find(p => p.name === 'Fragile Village');
+  
+  assert(
+    fragileVillage?.size === 0,
+    'Test 8: Population reduced to 0',
+    `Expected size 0, got ${fragileVillage?.size}`
+  );
+
+  assert(
+    fragileVillage?.isExtinct === true,
+    'Test 8: Population marked as extinct',
+    'Population should have isExtinct flag set to true'
+  );
+
+  // Check that extinction event was created
+  const extinctionEvent = result8.events.find(e => e.title.includes('Fragile Village') && e.title.includes('Extinct'));
+  assert(
+    extinctionEvent !== undefined,
+    'Test 8: Extinction event created',
+    'Should have created an extinction event'
+  );
+
+  // ============================================
+  // Test 9: Monster addition creates hostile relations
+  // ============================================
+  console.log('\n--- Test 9: Monster Addition Creates Hostile Relations ---');
+  
+  const world9 = await worldManager.createWorld({
+    ...initialWorld,
+    population: {
+      ...initialWorld.population,
+      name: 'Peaceful Town',
+    },
+  });
+  const worldId9 = world9.id;
+  world9.timestamp = 100;
+  worldManager.updateWorld(worldId9, world9);
+
+  const monsterInvasionDecision = {
+    technologicalProgress: [],
+    events: [],
+    populationChanges: [],
+    newPopulations: [
+      {
+        name: 'Orc Warband',
+        race: 'monster',
+        size: 50,
+        culture: 'Warrior Tribes',
+        organization: 'tribal',
+        monsterType: 'orc',
+        dangerLevel: 7,
+        behavior: 'aggressive',
+      },
+    ],
+  };
+
+  const result9 = simulationEngine.simulate(worldId9, params, monsterInvasionDecision);
+  
+  const orcWarband = result9.society.populations.find(p => p.name === 'Orc Warband');
+  const peacefulTown = result9.society.populations.find(p => p.name === 'Peaceful Town');
+  
+  assert(
+    orcWarband !== undefined,
+    'Test 9: Monster population added',
+    'Orc Warband should exist'
+  );
+
+  assert(
+    isMonstrous(orcWarband),
+    'Test 9: Population is marked as monstrous',
+    'Orc Warband should be identified as a monster'
+  );
+
+  // Check that hostile relations were established
+  assert(
+    orcWarband?.relations[peacefulTown?.id || ''] === 'hostile',
+    'Test 9: Hostile relations with civilization',
+    'Monsters should have hostile relations with civilizations'
+  );
+
+  assert(
+    peacefulTown?.relations[orcWarband?.id || ''] === 'hostile',
+    'Test 9: Civilization has hostile relations with monsters',
+    'Civilizations should have hostile relations with monsters'
+  );
+
+  // Check that invasion event was created
+  const invasionEvent = result9.events.find(e => e.title.includes('Orc Warband') && e.type === EventType.MONSTER_INVASION);
+  assert(
+    invasionEvent !== undefined,
+    'Test 9: Monster invasion event created',
+    'Should have created a monster invasion event'
+  );
+
+  // ============================================
+  // Test 10: Civilization addition creates neutral relations
+  // ============================================
+  console.log('\n--- Test 10: Civilization Addition Creates Neutral Relations ---');
+  
+  const world10 = await worldManager.createWorld({
+    ...initialWorld,
+    population: {
+      ...initialWorld.population,
+      name: 'Original Settlement',
+      race: 'human',
+    },
+  });
+  const worldId10 = world10.id;
+  world10.timestamp = 100;
+  worldManager.updateWorld(worldId10, world10);
+
+  const civilizationDecision = {
+    technologicalProgress: [],
+    events: [],
+    populationChanges: [],
+    newPopulations: [
+      {
+        name: 'Elven Enclave',
+        race: 'elf',
+        size: 200,
+        culture: 'Forest Dwellers',
+        organization: 'feudal',
+      },
+    ],
+  };
+
+  const result10 = simulationEngine.simulate(worldId10, params, civilizationDecision);
+  
+  const elvenEnclave = result10.society.populations.find(p => p.name === 'Elven Enclave');
+  const originalSettlement = result10.society.populations.find(p => p.name === 'Original Settlement');
+  
+  assert(
+    elvenEnclave !== undefined,
+    'Test 10: New civilization added',
+    'Elven Enclave should exist'
+  );
+
+  assert(
+    !isMonstrous(elvenEnclave),
+    'Test 10: Population is not monstrous',
+    'Elven Enclave should not be a monster'
+  );
+
+  // Check that neutral relations were established
+  assert(
+    elvenEnclave?.relations[originalSettlement?.id || ''] === 'neutral',
+    'Test 10: Neutral relations with existing civilization',
+    'New civilization should have neutral relations'
+  );
+
+  assert(
+    originalSettlement?.relations[elvenEnclave?.id || ''] === 'neutral',
+    'Test 10: Existing civilization has neutral relations',
+    'Existing civilization should have neutral relations with new arrivals'
+  );
+
+  // Check that migration event was created
+  const migrationEvent = result10.events.find(e => e.title.includes('Elven Enclave') && e.type === EventType.MIGRATION);
+  assert(
+    migrationEvent !== undefined,
+    'Test 10: Civilization migration event created',
+    'Should have created a migration event'
   );
 
   // ============================================

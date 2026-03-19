@@ -5,6 +5,8 @@
  * allowing external AI models to guide world evolution with narrative context.
  */
 
+import { PopulationTraits } from './index';
+
 /**
  * Decision about technological progress made by an LLM
  */
@@ -48,6 +50,30 @@ export interface LLMPopulationChange {
 }
 
 /**
+ * New population definition for LLM decisions
+ */
+export interface LLMPopulationDefinition {
+  /** Name of the new population */
+  name: string;
+  /** Race/species of the population */
+  race: string;
+  /** Initial population size */
+  size: number;
+  /** Cultural identity */
+  culture: string;
+  /** Social organization level */
+  organization: 'nomadic' | 'tribal' | 'feudal' | 'kingdom' | 'empire';
+  /** Monster type (only for monsters) */
+  monsterType?: string;
+  /** Threat level 1-10 (only for monsters) */
+  dangerLevel?: number;
+  /** Monster behavior pattern (only for monsters) */
+  behavior?: string;
+  /** Optional population traits */
+  traits?: Partial<PopulationTraits>;
+}
+
+/**
  * Complete decision set from an LLM for a simulation step
  * 
  * When provided to the simulation engine, these decisions override
@@ -78,6 +104,9 @@ export interface LLMStepDecision {
     technologyLevel?: number;
     name?: string;
   }>;
+  
+  /** New populations to add (migration, invasion, etc.) */
+  newPopulations?: LLMPopulationDefinition[];
 }
 
 /**

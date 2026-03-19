@@ -3,12 +3,12 @@
  * Handles resource consumption, regeneration, and technological progress
  */
 
-import { Event, Resource, Population, WorldState, EventType, CraftRarity } from '../../types';
+import { Event, Resource, Population, WorldState, EventType, CraftRarity, MonsterType, MonsterBehavior } from '../../types';
 import { WorldState as WorldStateType } from '../../types';
 import { SeededRandom } from '../../utils/random';
-import { generateEventId } from '../../utils/idGenerator';
+import { generateEventId, generatePopulationId } from '../../utils/idGenerator';
 import { isMonstrous } from '../../utils/raceTraits';
-import { LLMStepDecision, LLMTechnologicalProgress, LLMDecisionValidation, LLMEventDecision } from '../../types/llmDecision';
+import { LLMStepDecision, LLMTechnologicalProgress, LLMDecisionValidation, LLMEventDecision, LLMPopulationDefinition } from '../../types/llmDecision';
 
 export class ResourceModule {
   private rng: SeededRandom;
@@ -687,7 +687,34 @@ export class ResourceModule {
       const population = world.society.populations.find(p => p.id === change.populationId);
       if (population) {
         if (change.sizeDelta !== undefined) {
-          population.size = Math.max(0, population.size + change.sizeDelta);
+          const newSize = population.size + change.sizeDelta;
+          
+          // Handle extinction (size <= 0)
+          if (newSize <= 0) {
+            population.size = 0;
+            population.isExtinct = true;
+            
+            // Create extinction event
+            const extinctionEvent: Event = {
+              id: generateEventId(),
+              year,
+              type: EventType.SOCIAL,
+              title: `${population.name} Goes Extinct`,
+              description: `The ${population.name} have vanished from the world. Their people are no more.`,
+              causes: [],
+              effects: [],
+              impact: {
+                society: [{
+                  type: 'destroy',
+                  target: population.name,
+                  description: `Population ${population.name} has gone extinct`,
+                }],
+              },
+            };
+            events.push(extinctionEvent);
+          } else {
+            population.size = newSize;
+          }
         }
         if (change.technologyLevel !== undefined) {
           // Validate tech level change
@@ -695,6 +722,75 @@ export class ResourceModule {
             population.technologyLevel = change.technologyLevel;
           }
         }
+      }
+    }
+
+    // Apply new population additions
+    if (decision.newPopulations && decision.newPopulations.length > 0) {
+      for (let i = 0; i < decision.newPopulations.length; i++) {
+        const newPopDef = decision.newPopulations[i];
+        if (!newPopDef) continue;
+
+        // Create full Population object
+        const newPopulation: Population = {
+          id: generatePopulationId(),
+          name: newPopDef.name,
+          race: newPopDef.race,
+          size: newPopDef.size,
+          culture: newPopDef.culture,
+          traits: newPopDef.traits,
+          technologyLevel: newPopDef.traits?.baseTechLevel ?? 0,
+          organization: newPopDef.organization,
+          beliefs: [],
+          religiousTolerance: 'tolerant',
+          relations: {},
+          crafts: [],
+        };
+
+        // Set up monster-specific fields if applicable
+        if (newPopDef.race === 'monster' || newPopDef.monsterType) {
+          newPopulation.race = 'monster';
+          newPopulation.monsterType = newPopDef.monsterType ? (newPopDef.monsterType as MonsterType) : MonsterType.ORC;
+          newPopulation.dangerLevel = newPopDef.dangerLevel ?? 5;
+          newPopulation.behavior = newPopDef.behavior ? (newPopDef.behavior as MonsterBehavior) : MonsterBehavior.AGGRESSIVE;
+          newPopulation.raidFrequency = newPopulation.behavior === MonsterBehavior.AGGRESSIVE ? 0.6 : 
+                                        newPopulation.behavior === MonsterBehavior.TERRITORIAL ? 0.4 : 0.2;
+          newPopulation.isDormant = newPopulation.behavior === MonsterBehavior.DORMANT;
+        }
+
+        // Set up relations with existing populations
+        for (const existingPop of world.society.populations) {
+          // Monsters are hostile to civilizations
+          if (isMonstrous(newPopulation) || isMonstrous(existingPop)) {
+            newPopulation.relations[existingPop.id] = 'hostile';
+            existingPop.relations[newPopulation.id] = 'hostile';
+          } else {
+            newPopulation.relations[existingPop.id] = 'neutral';
+            existingPop.relations[newPopulation.id] = 'neutral';
+          }
+        }
+
+        // Add to world populations
+        world.society.populations.push(newPopulation);
+
+        // Create arrival event
+        const arrivalEvent: Event = {
+          id: generateEventId(),
+          year,
+          type: isMonstrous(newPopulation) ? EventType.MONSTER_INVASION : EventType.MIGRATION,
+          title: `${newPopDef.name} Arrive`,
+          description: `A new ${newPopDef.race} group, the ${newPopDef.name}, has arrived in the region. ${newPopDef.culture} by nature, they bring ${newPopDef.size} souls to settle.`,
+          causes: [],
+          effects: [],
+          impact: {
+            society: [{
+              type: 'create',
+              target: newPopDef.name,
+              description: `${newPopDef.size} ${newPopDef.race} ${newPopDef.name} have arrived`,
+            }],
+          },
+        };
+        events.push(arrivalEvent);
       }
     }
 

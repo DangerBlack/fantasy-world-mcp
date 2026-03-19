@@ -343,6 +343,9 @@ export interface Population {
   relations: Record<string, 'hostile' | 'neutral' | 'friendly' | 'allied'>;
   crafts: string[]; // IDs of crafts created/owned by this population
   
+  // Extinction tracking
+  isExtinct?: boolean; // If true, population has gone extinct
+  
   // Monster-specific fields (optional - deprecated, use traits)
   monsterType?: MonsterType;
   monsterSubtype?: string;
