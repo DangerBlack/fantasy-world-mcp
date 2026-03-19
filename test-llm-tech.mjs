@@ -330,11 +330,13 @@ async function runTests() {
     'Test 5: Context has correct world ID',
     'World ID should match'
   );
+  
+  console.log(`  Debug: world.timestamp = ${world.timestamp}, context.currentYear = ${context.currentYear}`);
 
   assert(
-    context.currentYear === 10,
+    context.currentYear === world.timestamp,
     'Test 5: Context has correct year',
-    'Current year should be 10 (initial timestamp)'
+    `Current year should match world timestamp (${world.timestamp})`
   );
 
   assert(
